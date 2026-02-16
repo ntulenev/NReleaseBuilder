@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace NReleaseBuilder.Transport;
 
 /// <summary>
@@ -9,6 +12,11 @@ public sealed class JiraIssueStatusResponseDto
     /// Issue fields payload.
     /// </summary>
     public JiraIssueFieldsDto? Fields { get; init; }
+
+    /// <summary>
+    /// Mapping of field identifiers to display names when <c>expand=names</c> is requested.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?>? Names { get; init; }
 }
 
 /// <summary>
@@ -20,6 +28,12 @@ public sealed class JiraIssueFieldsDto
     /// Issue status payload.
     /// </summary>
     public JiraStatusDto? Status { get; init; }
+
+    /// <summary>
+    /// Additional Jira fields including custom fields.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? AdditionalFields { get; init; }
 }
 
 /// <summary>

@@ -83,7 +83,12 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 .Where(x => x.IsValid && x.Parsed > currentVersion)
                 .OrderBy(x => x.Parsed)
                 .ThenBy(x => x.Tag.Name.Value, StringComparer.OrdinalIgnoreCase)
-                .Select(x => new VersionJiraRow(x.Tag.Name, x.Tag.JiraTask, x.Tag.JiraStatus))
+                .Select(x => new VersionJiraRow(
+                    x.Tag.Name,
+                    x.Tag.JiraTask,
+                    x.Tag.JiraStatus,
+                    x.Tag.HasRequiredActions,
+                    x.Tag.HasBreakingChanges))
                 .Distinct()
                 .ToArray();
 

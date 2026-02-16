@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 
 using Microsoft.Extensions.Options;
 
@@ -270,7 +269,6 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
 
         RenderTable(filteredRows);
         RenderSummary(filteredRows);
-        RenderSlackCopyText(filteredRows, allowedStatuses);
         RenderUniqueJiraTaskStatusChart(filteredRows);
         RenderPdfReport(filteredRows, allowedStatuses, statusStatistics);
     }
@@ -346,17 +344,7 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(allowedStatuses);
-
-        if (rows.Count == 0)
-        {
-            return;
-        }
-
-        var slackCopyText = BuildSlackCopyText(rows, allowedStatuses);
-
-        AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine("Slack-ready summary");
-        AnsiConsole.WriteLine(slackCopyText);
+        // Slack-ready output is disabled by request.
     }
 
     private void RenderPdfReport(
@@ -438,48 +426,6 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
             .GeneratePdf(outputPath);
 
         AnsiConsole.MarkupLine($"[grey]PDF report:[/] [silver]{Markup.Escape(outputPath)}[/]");
-    }
-
-    private static string BuildSlackCopyText(
-        IReadOnlyList<ComponentCheckRow> rows,
-        IReadOnlyList<JiraStatusName> allowedStatuses)
-    {
-        var builder = new StringBuilder();
-        _ = builder.AppendLine("Slack copy:");
-        _ = builder.AppendLine("Jira filter: " + string.Join(", ", allowedStatuses.Select(static x => x.Value)));
-        _ = builder.AppendLine();
-
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var row = rows[i];
-            _ = builder.AppendLine(
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0}. {1} | {2} | current {3}",
-                    row.Index.Value,
-                    row.Component.Value,
-                    row.Repository.Value,
-                    row.CurrentVersion.Value));
-
-            if (row.NewerVersions.Count == 0)
-            {
-                _ = builder.AppendLine("   - no newer versions");
-                continue;
-            }
-
-            foreach (var version in row.NewerVersions)
-            {
-                _ = builder.AppendLine(
-                    "   - "
-                    + version.Version.Value
-                    + " | "
-                    + version.JiraTask.Value
-                    + " | "
-                    + version.JiraStatus.Value);
-            }
-        }
-
-        return builder.ToString().TrimEnd();
     }
 
     private static void ComposePdfEmptyStateSection(
@@ -568,14 +514,41 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
                         return;
                     }
 
+                    _ = details.Item().Text("Version | JiraTask | JiraStatus | Alerts").FontColor("#6b7280");
+
                     foreach (var version in row.NewerVersions)
                     {
-                        _ = details.Item().Text(
-                            version.Version.Value
-                            + " | "
-                            + version.JiraTask.Value
-                            + " | "
-                            + version.JiraStatus.Value);
+                        details.Item().Text(text =>
+                        {
+                            _ = text.Span(
+                                version.Version.Value
+                                + " | "
+                                + version.JiraTask.Value
+                                + " | "
+                                + version.JiraStatus.Value
+                                + " | ");
+
+                            if (!version.HasRequiredActions && !version.HasBreakingChanges)
+                            {
+                                _ = text.Span("-").FontColor("#6b7280");
+                                return;
+                            }
+
+                            if (version.HasRequiredActions)
+                            {
+                                _ = text.Span("RA").Bold().FontColor("#ffaf00");
+                            }
+
+                            if (version.HasBreakingChanges)
+                            {
+                                if (version.HasRequiredActions)
+                                {
+                                    _ = text.Span(" ");
+                                }
+
+                                _ = text.Span("BC").Bold().FontColor("#ff0000");
+                            }
+                        });
                     }
                 });
             }
@@ -745,15 +718,41 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
         _ = subTable.AddColumn(new TableColumn("[grey]Version[/]").NoWrap());
         _ = subTable.AddColumn(new TableColumn("[grey]JiraTask[/]"));
         _ = subTable.AddColumn(new TableColumn("[grey]JiraStatus[/]"));
+        _ = subTable.AddColumn(new TableColumn("[grey]Alerts[/]").NoWrap());
 
         foreach (var item in row.NewerVersions)
         {
             var jiraTask = item.JiraTask.Value;
             var jiraStatus = item.JiraStatus.Value;
-            _ = subTable.AddRow(Markup.Escape(item.Version.Value), Markup.Escape(jiraTask), Markup.Escape(jiraStatus));
+            _ = subTable.AddRow(
+                Markup.Escape(item.Version.Value),
+                Markup.Escape(jiraTask),
+                Markup.Escape(jiraStatus),
+                FormatAlertMarkup(item.HasRequiredActions, item.HasBreakingChanges));
         }
 
         return new Rows(aheadCounter, subTable);
+    }
+
+    private static string FormatAlertMarkup(bool hasRequiredActions, bool hasBreakingChanges)
+    {
+        if (!hasRequiredActions && !hasBreakingChanges)
+        {
+            return "[grey]-[/]";
+        }
+
+        var renderedLabels = new List<string>(2);
+        if (hasRequiredActions)
+        {
+            renderedLabels.Add("[bold orange1]RA[/]");
+        }
+
+        if (hasBreakingChanges)
+        {
+            renderedLabels.Add("[bold red]BC[/]");
+        }
+
+        return string.Join(" ", renderedLabels);
     }
 
     private static string FormatAheadCounterMarkup(int newerVersionCount)

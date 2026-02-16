@@ -11,14 +11,20 @@ public readonly record struct RepositoryTagInfo
     /// <param name="name">Tag name.</param>
     /// <param name="jiraTask">Resolved Jira task key(s).</param>
     /// <param name="jiraStatus">Resolved Jira status(es).</param>
+    /// <param name="hasRequiredActions">Whether related Jira issues have Required Actions.</param>
+    /// <param name="hasBreakingChanges">Whether related Jira issues have Breaking changes.</param>
     public RepositoryTagInfo(
         VersionLabel name,
         JiraTaskReference jiraTask,
-        JiraStatusReference jiraStatus)
+        JiraStatusReference jiraStatus,
+        bool hasRequiredActions,
+        bool hasBreakingChanges)
     {
         Name = name;
         JiraTask = jiraTask;
         JiraStatus = jiraStatus;
+        HasRequiredActions = hasRequiredActions;
+        HasBreakingChanges = hasBreakingChanges;
     }
 
     /// <summary>
@@ -35,4 +41,14 @@ public readonly record struct RepositoryTagInfo
     /// Resolved Jira status(es).
     /// </summary>
     public JiraStatusReference JiraStatus { get; }
+
+    /// <summary>
+    /// Whether related Jira issues have Required Actions.
+    /// </summary>
+    public bool HasRequiredActions { get; }
+
+    /// <summary>
+    /// Whether related Jira issues have Breaking changes.
+    /// </summary>
+    public bool HasBreakingChanges { get; }
 }

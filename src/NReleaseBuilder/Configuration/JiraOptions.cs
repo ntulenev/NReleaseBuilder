@@ -31,6 +31,21 @@ public sealed class JiraOptions
     public IReadOnlyList<string> AllowedTaskStatuses { get; init; } = [];
 
     /// <summary>
+    /// Enables release alert checks for Jira custom fields.
+    /// </summary>
+    public bool CheckReleaseAlerts { get; init; }
+
+    /// <summary>
+    /// Jira custom field display name for release Required Actions.
+    /// </summary>
+    public string RequiredActionsFieldName { get; init; } = "Required Actions";
+
+    /// <summary>
+    /// Jira custom field display name for release Breaking changes.
+    /// </summary>
+    public string BreakingChangesFieldName { get; init; } = "Breaking changes";
+
+    /// <summary>
     /// Number of retries for transient Jira errors.
     /// </summary>
     [Range(0, 10)]

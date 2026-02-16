@@ -117,6 +117,16 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         {
             errors.Add("Jira.AllowedTaskStatuses must not contain empty values.");
         }
+
+        if (string.IsNullOrWhiteSpace(jira.RequiredActionsFieldName))
+        {
+            errors.Add("Jira.RequiredActionsFieldName must not be empty.");
+        }
+
+        if (string.IsNullOrWhiteSpace(jira.BreakingChangesFieldName))
+        {
+            errors.Add("Jira.BreakingChangesFieldName must not be empty.");
+        }
     }
 
     private static void ValidatePdf(PdfOptions? pdf, List<string> errors)

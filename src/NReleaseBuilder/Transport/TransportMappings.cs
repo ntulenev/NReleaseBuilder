@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using NReleaseBuilder.Models;
 
 namespace NReleaseBuilder.Transport;
@@ -49,17 +51,27 @@ public static class TransportMappings
     /// Converts a Jira issue DTO into a domain model.
     /// </summary>
     /// <param name="dto">Jira issue DTO.</param>
+    /// <param name="requiredActionsFieldName">Custom field display name for Required Actions.</param>
+    /// <param name="breakingChangesFieldName">Custom field display name for Breaking changes.</param>
     /// <returns>Domain Jira issue model.</returns>
-    public static JiraIssueInfo ToDomain(this JiraIssueStatusResponseDto dto)
+    public static JiraIssueInfo ToDomain(
+        this JiraIssueStatusResponseDto dto,
+        string requiredActionsFieldName,
+        string breakingChangesFieldName)
     {
         ArgumentNullException.ThrowIfNull(dto);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requiredActionsFieldName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(breakingChangesFieldName);
 
         var statusNameText = dto.Fields?.Status?.Name;
         JiraStatusName? statusName = JiraStatusName.TryCreate(statusNameText, out var parsedStatusName)
             ? parsedStatusName
             : null;
 
-        return new JiraIssueInfo(statusName);
+        var hasRequiredActions = HasCustomFieldValue(dto, requiredActionsFieldName);
+        var hasBreakingChanges = HasCustomFieldValue(dto, breakingChangesFieldName);
+
+        return new JiraIssueInfo(statusName, hasRequiredActions, hasBreakingChanges);
     }
 
     /// <summary>
@@ -86,10 +98,76 @@ public static class TransportMappings
                 ? parsedStatusName
                 : null;
 
-            issues.Add(new JiraIssueInfo(statusName));
+            issues.Add(new JiraIssueInfo(statusName, false, false));
         }
 
         return new JiraSearchResult(issues);
+    }
+
+    private static bool HasCustomFieldValue(JiraIssueStatusResponseDto dto, string fieldDisplayName)
+    {
+        var fieldIdentifier = ResolveFieldIdentifierByDisplayName(dto.Names, fieldDisplayName);
+        if (string.IsNullOrWhiteSpace(fieldIdentifier))
+        {
+            return false;
+        }
+
+        var additionalFields = dto.Fields?.AdditionalFields;
+        if (additionalFields is null || !additionalFields.TryGetValue(fieldIdentifier, out var fieldValue))
+        {
+            return false;
+        }
+
+        return HasMeaningfulJsonValue(fieldValue);
+    }
+
+    private static string? ResolveFieldIdentifierByDisplayName(
+        IReadOnlyDictionary<string, string?>? fieldNamesByIdentifier,
+        string fieldDisplayName)
+    {
+        if (fieldNamesByIdentifier is null || fieldNamesByIdentifier.Count == 0)
+        {
+            return null;
+        }
+
+        foreach (var (fieldIdentifier, displayName) in fieldNamesByIdentifier)
+        {
+            if (string.Equals(displayName, fieldDisplayName, StringComparison.OrdinalIgnoreCase))
+            {
+                return fieldIdentifier;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasMeaningfulJsonValue(JsonElement fieldValue)
+    {
+        return fieldValue.ValueKind switch
+        {
+            JsonValueKind.Undefined => false,
+            JsonValueKind.Null => false,
+            JsonValueKind.Object => HasMeaningfulObjectValue(fieldValue),
+            JsonValueKind.Array => fieldValue.EnumerateArray().Any(HasMeaningfulJsonValue),
+            JsonValueKind.String => !string.IsNullOrWhiteSpace(fieldValue.GetString()),
+            JsonValueKind.Number => true,
+            JsonValueKind.True => true,
+            JsonValueKind.False => true,
+            _ => false,
+        };
+    }
+
+    private static bool HasMeaningfulObjectValue(JsonElement fieldValue)
+    {
+        foreach (var property in fieldValue.EnumerateObject())
+        {
+            if (HasMeaningfulJsonValue(property.Value))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string? NormalizeOptional(string? value)

@@ -38,7 +38,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     /// <inheritdoc />
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
-        var componentRows = TryReadComponentRows()?.ToList();
+        var componentRows = TryReadComponentRows()?.Take(10)?.ToList();
 
         if (componentRows is null)
         {
