@@ -143,6 +143,8 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             return RepositoryTagLookup.ApiError(repositoryForBitbucketCalls, tagLoadResult.Error);
         }
 
+        var projectNames = options.ResolveProjectNames();
+
         var tagsToInspect = tagLoadResult.Tags
             .Where(tag => minCurrentVersion is null
                 || (VersionParser.TryParse(tag.Name, out var parsedVersion) && parsedVersion > minCurrentVersion))
@@ -156,6 +158,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         foreach (var tag in tagsToInspect)
         {
             var jiraTask = "N/A";
+            var jiraTitle = "N/A";
             var jiraStatus = "N/A";
             var commitHash = tag.CommitHash;
 
@@ -170,7 +173,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                         commitHash,
                         cancellationToken).ConfigureAwait(false);
 
-                    jiraTask = ExtractJiraTask(message, options.ResolveProjectNames());
+                    jiraTask = ExtractJiraTask(message, projectNames);
                     jiraCacheByCommit[commitHash] = jiraTask;
                 }
             }
@@ -179,19 +182,24 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                 jiraHttpClient,
                 jiraOptions,
                 jiraTask,
+                projectNames,
                 jiraTaskInfoCacheByTask,
                 jiraSemaphore,
                 cancellationToken).ConfigureAwait(false);
 
             jiraStatus = jiraResolution.Statuses;
             jiraTask = jiraResolution.Tasks;
+            jiraTitle = jiraResolution.Titles;
 
             enrichedTags.Add(new RepositoryTagInfo(
                 new VersionLabel(tag.Name),
                 new JiraTaskReference(jiraTask),
+                new JiraTitleReference(jiraTitle),
                 new JiraStatusReference(jiraStatus),
+                jiraResolution.TaskAlertDetails,
                 jiraResolution.HasRequiredActions,
-                jiraResolution.HasBreakingChanges));
+                jiraResolution.HasBreakingChanges,
+                jiraResolution.HasDependencyIssues));
             progress?.CommitProcessed?.Invoke(repository.Value);
         }
 
@@ -321,6 +329,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         HttpClient jiraHttpClient,
         JiraOptions jiraOptions,
         string jiraTask,
+        string[] projectNames,
         ConcurrentDictionary<string, JiraTaskInfo> jiraTaskInfoCacheByTask,
         SemaphoreSlim jiraSemaphore,
         CancellationToken cancellationToken)
@@ -328,12 +337,15 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         var jiraTasks = SplitJiraTasks(jiraTask);
         if (jiraTasks.Length == 0)
         {
-            return new JiraTaskResolution("N/A", jiraTask, false, false);
+            return new JiraTaskResolution("N/A", jiraTask, "N/A", [], false, false, false);
         }
 
         var jiraStatuses = new List<string>(jiraTasks.Length);
+        var jiraTitles = new List<string>(jiraTasks.Length);
+        var taskAlertDetails = new List<JiraTaskAlertDetails>(jiraTasks.Length);
         var hasRequiredActions = false;
         var hasBreakingChanges = false;
+        var hasDependencyIssues = false;
         foreach (var task in jiraTasks)
         {
             if (!jiraTaskInfoCacheByTask.TryGetValue(task, out var jiraTaskInfo))
@@ -359,18 +371,39 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             }
 
             jiraStatuses.Add(jiraTaskInfo.Status);
+            jiraTitles.Add(jiraTaskInfo.Title);
+            var requiredActionsDetails = jiraOptions.CheckReleaseAlerts
+                ? jiraTaskInfo.RequiredActionsDetails
+                : null;
+            var breakingChangesDetails = jiraOptions.CheckReleaseAlerts
+                ? jiraTaskInfo.BreakingChangesDetails
+                : null;
+            taskAlertDetails.Add(new JiraTaskAlertDetails(
+                new JiraTaskReference(task),
+                new JiraTitleReference(jiraTaskInfo.Title),
+                new JiraStatusReference(jiraTaskInfo.Status),
+                requiredActionsDetails,
+                breakingChangesDetails));
             if (jiraOptions.CheckReleaseAlerts)
             {
                 hasRequiredActions |= jiraTaskInfo.HasRequiredActions;
                 hasBreakingChanges |= jiraTaskInfo.HasBreakingChanges;
+                hasDependencyIssues |= HasDependencyIssue(
+                    task,
+                    jiraTaskInfo.RequiredActionsDetails,
+                    jiraTaskInfo.BreakingChangesDetails,
+                    projectNames);
             }
         }
 
         return new JiraTaskResolution(
             string.Join(", ", jiraStatuses),
             string.Join(", ", jiraTasks),
+            string.Join(", ", jiraTitles),
+            taskAlertDetails,
             hasRequiredActions,
-            hasBreakingChanges);
+            hasBreakingChanges,
+            hasDependencyIssues);
     }
 
     private static string[] SplitJiraTasks(string jiraTask)
@@ -411,22 +444,21 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                 jiraTask,
                 cancellationToken).ConfigureAwait(false);
 
-            return new JiraTaskInfo(statusFromSearch ?? "Not found", false, false);
+            return new JiraTaskInfo(statusFromSearch ?? "Not found", "N/A", null, null);
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            return new JiraTaskInfo($"HTTP {(int)response.StatusCode}", false, false);
+            return new JiraTaskInfo($"HTTP {(int)response.StatusCode}", "N/A", null, null);
         }
 
         var issue = await ReadJiraIssueInfoAsync(response, jiraOptions, cancellationToken).ConfigureAwait(false);
+        var status = issue?.StatusName?.Value ?? "N/A";
+        var title = issue?.Title ?? "N/A";
+        var requiredActionsDetails = issue?.RequiredActionsDetails;
+        var breakingChangesDetails = issue?.BreakingChangesDetails;
 
-        if (issue?.StatusName is { } statusName)
-        {
-            return new JiraTaskInfo(statusName.Value, issue.HasRequiredActions, issue.HasBreakingChanges);
-        }
-
-        return new JiraTaskInfo("N/A", false, false);
+        return new JiraTaskInfo(status, title, requiredActionsDetails, breakingChangesDetails);
     }
 
     private static async Task<string?> TryGetJiraStatusBySearchAsync(
@@ -647,16 +679,72 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         return oneLine[..maxLength] + "...";
     }
 
+    private static bool HasDependencyIssue(
+        string currentTask,
+        string? requiredActionsDetails,
+        string? breakingChangesDetails,
+        string[] projectNames)
+    {
+        if (projectNames.Length == 0)
+        {
+            return false;
+        }
+
+        var details = string.Join(
+            Environment.NewLine,
+            new[] { requiredActionsDetails, breakingChangesDetails }
+                .Where(static text => !string.IsNullOrWhiteSpace(text)));
+
+        if (string.IsNullOrWhiteSpace(details))
+        {
+            return false;
+        }
+
+        var projectNamePattern = string.Join(
+            "|",
+            projectNames.Select(static projectName => Regex.Escape(projectName)));
+        if (string.IsNullOrWhiteSpace(projectNamePattern))
+        {
+            return false;
+        }
+
+        var matches = Regex.Matches(details, $@"\b(?:{projectNamePattern})-\d+\b", RegexOptions.IgnoreCase);
+        if (matches.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (Match match in matches)
+        {
+            var taskReference = match.Value.ToUpperInvariant();
+            if (!string.Equals(taskReference, currentTask, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private readonly record struct JiraTaskResolution(
         string Statuses,
         string Tasks,
+        string Titles,
+        IReadOnlyList<JiraTaskAlertDetails> TaskAlertDetails,
         bool HasRequiredActions,
-        bool HasBreakingChanges);
+        bool HasBreakingChanges,
+        bool HasDependencyIssues);
 
     private readonly record struct JiraTaskInfo(
         string Status,
-        bool HasRequiredActions,
-        bool HasBreakingChanges);
+        string Title,
+        string? RequiredActionsDetails,
+        string? BreakingChangesDetails)
+    {
+        public bool HasRequiredActions => !string.IsNullOrWhiteSpace(RequiredActionsDetails);
+
+        public bool HasBreakingChanges => !string.IsNullOrWhiteSpace(BreakingChangesDetails);
+    }
 
     private readonly record struct RepositoryTagReferenceLoadResult(
         bool IsRepositoryMissing,

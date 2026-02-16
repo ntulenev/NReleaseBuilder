@@ -67,11 +67,12 @@ public static class TransportMappings
         JiraStatusName? statusName = JiraStatusName.TryCreate(statusNameText, out var parsedStatusName)
             ? parsedStatusName
             : null;
+        var title = NormalizeIssueTitle(dto.Fields?.Summary);
 
-        var hasRequiredActions = HasCustomFieldValue(dto, requiredActionsFieldName);
-        var hasBreakingChanges = HasCustomFieldValue(dto, breakingChangesFieldName);
+        var requiredActionsDetails = ExtractCustomFieldText(dto, requiredActionsFieldName);
+        var breakingChangesDetails = ExtractCustomFieldText(dto, breakingChangesFieldName);
 
-        return new JiraIssueInfo(statusName, hasRequiredActions, hasBreakingChanges);
+        return new JiraIssueInfo(statusName, title, requiredActionsDetails, breakingChangesDetails);
     }
 
     /// <summary>
@@ -97,28 +98,29 @@ public static class TransportMappings
             JiraStatusName? statusName = JiraStatusName.TryCreate(statusNameText, out var parsedStatusName)
                 ? parsedStatusName
                 : null;
+            var title = NormalizeIssueTitle(issueDto.Fields?.Summary);
 
-            issues.Add(new JiraIssueInfo(statusName, false, false));
+            issues.Add(new JiraIssueInfo(statusName, title, null, null));
         }
 
         return new JiraSearchResult(issues);
     }
 
-    private static bool HasCustomFieldValue(JiraIssueStatusResponseDto dto, string fieldDisplayName)
+    private static string? ExtractCustomFieldText(JiraIssueStatusResponseDto dto, string fieldDisplayName)
     {
         var fieldIdentifier = ResolveFieldIdentifierByDisplayName(dto.Names, fieldDisplayName);
         if (string.IsNullOrWhiteSpace(fieldIdentifier))
         {
-            return false;
+            return null;
         }
 
         var additionalFields = dto.Fields?.AdditionalFields;
         if (additionalFields is null || !additionalFields.TryGetValue(fieldIdentifier, out var fieldValue))
         {
-            return false;
+            return null;
         }
 
-        return HasMeaningfulJsonValue(fieldValue);
+        return ExtractJsonFieldText(fieldValue);
     }
 
     private static string? ResolveFieldIdentifierByDisplayName(
@@ -141,13 +143,112 @@ public static class TransportMappings
         return null;
     }
 
+    private static string? ExtractJsonFieldText(JsonElement fieldValue)
+    {
+        var lines = new List<string>();
+        AppendJsonFieldText(fieldValue, lines);
+        if (lines.Count == 0)
+        {
+            return null;
+        }
+
+        var text = string.Join(
+            Environment.NewLine,
+            lines.Where(static line => !string.IsNullOrWhiteSpace(line)));
+
+        return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+    }
+
+    private static void AppendJsonFieldText(JsonElement fieldValue, List<string> lines)
+    {
+        switch (fieldValue.ValueKind)
+        {
+            case JsonValueKind.Undefined:
+            case JsonValueKind.Null:
+                return;
+            case JsonValueKind.Object:
+                AppendObjectFieldText(fieldValue, lines);
+                return;
+            case JsonValueKind.Array:
+                AppendArrayFieldText(fieldValue, lines);
+                return;
+            case JsonValueKind.String:
+                AppendLine(lines, fieldValue.GetString());
+                return;
+            case JsonValueKind.Number:
+                AppendLine(lines, fieldValue.GetRawText());
+                return;
+            case JsonValueKind.True:
+                AppendLine(lines, "true");
+                return;
+            case JsonValueKind.False:
+                AppendLine(lines, "false");
+                return;
+            default:
+                return;
+        }
+    }
+
+    private static void AppendObjectFieldText(JsonElement fieldValue, List<string> lines)
+    {
+        var linesBefore = lines.Count;
+
+        if (fieldValue.TryGetProperty("text", out var textValue))
+        {
+            AppendJsonFieldText(textValue, lines);
+        }
+
+        if (fieldValue.TryGetProperty("value", out var valueValue))
+        {
+            AppendJsonFieldText(valueValue, lines);
+        }
+
+        if (fieldValue.TryGetProperty("content", out var contentValue))
+        {
+            AppendJsonFieldText(contentValue, lines);
+        }
+
+        if (lines.Count > linesBefore)
+        {
+            return;
+        }
+
+        foreach (var property in fieldValue.EnumerateObject())
+        {
+            AppendJsonFieldText(property.Value, lines);
+        }
+
+        if (lines.Count > linesBefore || !HasMeaningfulJsonValue(fieldValue))
+        {
+            return;
+        }
+
+        AppendLine(lines, fieldValue.GetRawText());
+    }
+
+    private static void AppendArrayFieldText(JsonElement fieldValue, List<string> lines)
+    {
+        foreach (var item in fieldValue.EnumerateArray())
+        {
+            AppendJsonFieldText(item, lines);
+        }
+    }
+
+    private static void AppendLine(List<string> lines, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            lines.Add(value.Trim());
+        }
+    }
+
     private static bool HasMeaningfulJsonValue(JsonElement fieldValue)
     {
         return fieldValue.ValueKind switch
         {
             JsonValueKind.Undefined => false,
             JsonValueKind.Null => false,
-            JsonValueKind.Object => HasMeaningfulObjectValue(fieldValue),
+            JsonValueKind.Object => fieldValue.EnumerateObject().Any(static property => HasMeaningfulJsonValue(property.Value)),
             JsonValueKind.Array => fieldValue.EnumerateArray().Any(HasMeaningfulJsonValue),
             JsonValueKind.String => !string.IsNullOrWhiteSpace(fieldValue.GetString()),
             JsonValueKind.Number => true,
@@ -157,22 +258,15 @@ public static class TransportMappings
         };
     }
 
-    private static bool HasMeaningfulObjectValue(JsonElement fieldValue)
-    {
-        foreach (var property in fieldValue.EnumerateObject())
-        {
-            if (HasMeaningfulJsonValue(property.Value))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 
     private static string? NormalizeOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string NormalizeIssueTitle(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "N/A" : value.Trim();
     }
 
     private static Uri? CreateUriOrNull(string? next)

@@ -30,6 +30,11 @@ public sealed class JiraIssueFieldsDto
     public JiraStatusDto? Status { get; init; }
 
     /// <summary>
+    /// Issue title/summary.
+    /// </summary>
+    public string? Summary { get; init; }
+
+    /// <summary>
     /// Additional Jira fields including custom fields.
     /// </summary>
     [JsonExtensionData]

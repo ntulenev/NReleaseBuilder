@@ -7,7 +7,6 @@ using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
 
 using Spectre.Console;
-using Spectre.Console.Rendering;
 
 namespace NReleaseBuilder.Presentation;
 
@@ -252,9 +251,8 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
         _ = table.AddColumn(new TableColumn("[bold]#[/]").RightAligned());
         _ = table.AddColumn(new TableColumn("[bold deepskyblue1]Component[/]"));
         _ = table.AddColumn(new TableColumn("[bold springgreen2]Repository[/]"));
-        _ = table.AddColumn(new TableColumn("[bold gold1]Current[/]").NoWrap());
+        _ = table.AddColumn(new TableColumn("[bold gold1]Current Version[/]").NoWrap());
         _ = table.AddColumn(new TableColumn("[bold]Status[/]").NoWrap());
-        _ = table.AddColumn(new TableColumn("[bold]Newer Versions[/]"));
 
         for (var i = 0; i < rows.Count; i++)
         {
@@ -264,11 +262,12 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
                 new Markup(Markup.Escape(row.Component.Value)),
                 new Markup(Markup.Escape(row.Repository.Value)),
                 new Markup(Markup.Escape(row.CurrentVersion.Value)),
-                new Markup(FormatStatus(row.Status)),
-                BuildNewerVersionsCell(row));
+                new Markup(FormatStatus(row.Status)));
         }
 
         AnsiConsole.Write(table);
+        RenderOutdatedVersionsSection(rows);
+        RenderStatusDetailsSection(rows);
     }
 
     /// <inheritdoc />
@@ -360,45 +359,212 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
         };
     }
 
-    private static IRenderable BuildNewerVersionsCell(ComponentCheckRow row)
+    private static void RenderOutdatedVersionsSection(IReadOnlyList<ComponentCheckRow> rows)
     {
-        if (row.NewerVersions.Count == 0)
+        var outdatedRows = rows
+            .Where(static row => row.Status == CheckStatus.Outdated && row.NewerVersions.Count > 0)
+            .ToArray();
+
+        if (outdatedRows.Length == 0)
         {
-            return new Markup(Markup.Escape(row.DetailsMessage.Value));
+            return;
         }
 
-        var aheadCounter = new Markup(FormatAheadCounterMarkup(row.NewerVersions.Count));
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(new Rule("[bold yellow]Outdated Components - Newer Versions[/]").RuleStyle("grey").LeftJustified());
 
-        var subTable = new Table()
-            .Border(TableBorder.Minimal)
-            .BorderColor(Color.Grey37)
-            .Expand();
-
-        _ = subTable.AddColumn(new TableColumn("[grey]Version[/]").NoWrap());
-        _ = subTable.AddColumn(new TableColumn("[grey]JiraTask[/]"));
-        _ = subTable.AddColumn(new TableColumn("[grey]JiraStatus[/]"));
-        _ = subTable.AddColumn(new TableColumn("[grey]Alerts[/]").NoWrap());
-
-        foreach (var item in row.NewerVersions)
+        foreach (var row in outdatedRows)
         {
-            _ = subTable.AddRow(
-                Markup.Escape(item.Version.Value),
-                Markup.Escape(item.JiraTask.Value),
-                Markup.Escape(item.JiraStatus.Value),
-                FormatAlertMarkup(item.HasRequiredActions, item.HasBreakingChanges));
-        }
+            AnsiConsole.MarkupLine(
+                $"[bold yellow]{row.Index.Value}. {Markup.Escape(row.Component.Value)}[/] [grey]({Markup.Escape(row.Repository.Value)})[/] {FormatAheadCounterMarkup(row.NewerVersions.Count, row.CurrentVersion.Value)}");
 
-        return new Rows(aheadCounter, subTable);
+            var versionsTable = new Table()
+                .Border(TableBorder.Rounded)
+                .BorderColor(Color.Grey37)
+                .Expand();
+
+            _ = versionsTable.AddColumn(new TableColumn("[grey]Version[/]").NoWrap());
+            _ = versionsTable.AddColumn(new TableColumn("[grey]JiraTask[/]"));
+            _ = versionsTable.AddColumn(new TableColumn("[grey]JiraTitle[/]"));
+            _ = versionsTable.AddColumn(new TableColumn("[grey]JiraStatus[/]"));
+            _ = versionsTable.AddColumn(new TableColumn("[grey]Alerts[/]").NoWrap());
+
+            foreach (var version in row.NewerVersions)
+            {
+                _ = versionsTable.AddRow(
+                    Markup.Escape(version.Version.Value),
+                    Markup.Escape(version.JiraTask.Value),
+                    Markup.Escape(version.JiraTitle.Value),
+                    Markup.Escape(version.JiraStatus.Value),
+                    FormatAlertMarkup(version.HasRequiredActions, version.HasBreakingChanges, version.HasDependencyIssues));
+            }
+
+            AnsiConsole.Write(versionsTable);
+            RenderReleaseAlertDetails(row.NewerVersions);
+        }
     }
 
-    private static string FormatAlertMarkup(bool hasRequiredActions, bool hasBreakingChanges)
+    private static void RenderStatusDetailsSection(IReadOnlyList<ComponentCheckRow> rows)
     {
-        if (!hasRequiredActions && !hasBreakingChanges)
+        var rowsWithDetails = rows
+            .Where(static row => HasDetails(row.DetailsMessage.Value))
+            .ToArray();
+
+        if (rowsWithDetails.Length == 0)
+        {
+            return;
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(new Rule("[bold]Status Details[/]").RuleStyle("grey").LeftJustified());
+
+        var detailsTable = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderColor(Color.Grey)
+            .Expand();
+
+        _ = detailsTable.AddColumn(new TableColumn("[bold]#[/]").RightAligned());
+        _ = detailsTable.AddColumn(new TableColumn("[bold]Component[/]"));
+        _ = detailsTable.AddColumn(new TableColumn("[bold]Status[/]").NoWrap());
+        _ = detailsTable.AddColumn(new TableColumn("[bold]Details[/]"));
+
+        foreach (var row in rowsWithDetails)
+        {
+            _ = detailsTable.AddRow(
+                new Markup($"[grey]{row.Index.Value}[/]"),
+                new Markup(Markup.Escape(row.Component.Value)),
+                new Markup(FormatStatus(row.Status)),
+                new Markup(Markup.Escape(row.DetailsMessage.Value)));
+        }
+
+        AnsiConsole.Write(detailsTable);
+    }
+
+    private static bool HasDetails(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return !string.Equals(value.Trim(), "-", StringComparison.Ordinal);
+    }
+
+    private static void RenderReleaseAlertDetails(IReadOnlyList<VersionJiraRow> versions)
+    {
+        var detailsByTask = BuildTaskAlertDetailsByTask(versions);
+
+        var breakingChanges = detailsByTask
+            .Where(static detail => HasDetails(detail.BreakingChangesDetails))
+            .ToArray();
+        var requiredActions = detailsByTask
+            .Where(static detail => HasDetails(detail.RequiredActionsDetails))
+            .ToArray();
+
+        if (breakingChanges.Length == 0 && requiredActions.Length == 0)
+        {
+            return;
+        }
+
+        AnsiConsole.WriteLine();
+        RenderReleaseAlertSection(
+            "Breaking Changes",
+            breakingChanges,
+            static detail => detail.BreakingChangesDetails ?? string.Empty);
+        RenderReleaseAlertSection(
+            "Required Actions",
+            requiredActions,
+            static detail => detail.RequiredActionsDetails ?? string.Empty);
+    }
+
+    private static void RenderReleaseAlertSection(
+        string title,
+        JiraTaskAlertDetails[] taskDetails,
+        Func<JiraTaskAlertDetails, string> detailSelector)
+    {
+        if (taskDetails.Length == 0)
+        {
+            return;
+        }
+
+        AnsiConsole.MarkupLine($"[bold]{Markup.Escape(title)}[/]");
+
+        foreach (var taskDetail in taskDetails)
+        {
+            AnsiConsole.MarkupLine(
+                $"[silver]•[/] [bold]{Markup.Escape(taskDetail.Task.Value)}[/] [grey]{Markup.Escape(taskDetail.Title.Value)}[/]");
+
+            var detailText = detailSelector(taskDetail);
+            var detailPanel = new Panel(new Text(detailText))
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Grey37)
+                .Expand();
+
+            AnsiConsole.Write(detailPanel);
+        }
+
+        AnsiConsole.WriteLine();
+    }
+
+    private static JiraTaskAlertDetails[] BuildTaskAlertDetailsByTask(IReadOnlyList<VersionJiraRow> versions)
+    {
+        var mergedByTask = new Dictionary<string, JiraTaskAlertDetails>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var version in versions)
+        {
+            foreach (var taskDetail in version.TaskAlertDetails)
+            {
+                if (!mergedByTask.TryGetValue(taskDetail.Task.Value, out var existing))
+                {
+                    mergedByTask[taskDetail.Task.Value] = taskDetail;
+                    continue;
+                }
+
+                mergedByTask[taskDetail.Task.Value] = MergeTaskAlertDetails(existing, taskDetail);
+            }
+        }
+
+        return
+        [
+            .. mergedByTask
+                .Values
+                .OrderBy(static detail => detail.Task.Value, StringComparer.OrdinalIgnoreCase)
+        ];
+    }
+
+    private static JiraTaskAlertDetails MergeTaskAlertDetails(
+        JiraTaskAlertDetails current,
+        JiraTaskAlertDetails candidate)
+    {
+        var title = string.Equals(current.Title.Value, "N/A", StringComparison.OrdinalIgnoreCase)
+            ? candidate.Title
+            : current.Title;
+        var status = string.Equals(current.Status.Value, "N/A", StringComparison.OrdinalIgnoreCase)
+            ? candidate.Status
+            : current.Status;
+        var requiredActionsDetails = HasDetails(current.RequiredActionsDetails)
+            ? current.RequiredActionsDetails
+            : candidate.RequiredActionsDetails;
+        var breakingChangesDetails = HasDetails(current.BreakingChangesDetails)
+            ? current.BreakingChangesDetails
+            : candidate.BreakingChangesDetails;
+
+        return new JiraTaskAlertDetails(
+            current.Task,
+            title,
+            status,
+            requiredActionsDetails,
+            breakingChangesDetails);
+    }
+
+    private static string FormatAlertMarkup(bool hasRequiredActions, bool hasBreakingChanges, bool hasDependencyIssues)
+    {
+        if (!hasRequiredActions && !hasBreakingChanges && !hasDependencyIssues)
         {
             return "[grey]-[/]";
         }
 
-        var renderedLabels = new List<string>(2);
+        var renderedLabels = new List<string>(3);
         if (hasRequiredActions)
         {
             renderedLabels.Add("[bold orange1]RA[/]");
@@ -409,14 +575,19 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
             renderedLabels.Add("[bold red]BC[/]");
         }
 
+        if (hasDependencyIssues)
+        {
+            renderedLabels.Add("[bold deepskyblue2]D[/]");
+        }
+
         return string.Join(" ", renderedLabels);
     }
 
-    private static string FormatAheadCounterMarkup(int newerVersionCount)
+    private static string FormatAheadCounterMarkup(int newerVersionCount, string currentVersion)
     {
         if (newerVersionCount <= 0)
         {
-            return "[grey]0 releases ahead[/]";
+            return $"[grey]0 releases ahead (current: {Markup.Escape(currentVersion)})[/]";
         }
 
         var color = newerVersionCount switch
@@ -430,7 +601,7 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
             ? "1 release ahead"
             : string.Format(CultureInfo.InvariantCulture, "{0} releases ahead", newerVersionCount);
 
-        return $"[bold {color}]{counterLabel}[/]";
+        return $"[bold {color}]{counterLabel}[/] [grey](current: {Markup.Escape(currentVersion)})[/]";
     }
 
     private static Dictionary<JiraStatusName, int> BuildUniqueJiraTaskCountsByStatus(

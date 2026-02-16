@@ -86,10 +86,12 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 .Select(x => new VersionJiraRow(
                     x.Tag.Name,
                     x.Tag.JiraTask,
+                    x.Tag.JiraTitle,
                     x.Tag.JiraStatus,
+                    x.Tag.TaskAlertDetails,
                     x.Tag.HasRequiredActions,
-                    x.Tag.HasBreakingChanges))
-                .Distinct()
+                    x.Tag.HasBreakingChanges,
+                    x.Tag.HasDependencyIssues))
                 .ToArray();
 
             if (newerVersions.Length == 0)

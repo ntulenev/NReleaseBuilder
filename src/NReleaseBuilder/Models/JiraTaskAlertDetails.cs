@@ -1,40 +1,46 @@
 namespace NReleaseBuilder.Models;
 
 /// <summary>
-/// Jira issue domain model with resolved status and title.
+/// Per-task Jira release alert details.
 /// </summary>
-public sealed class JiraIssueInfo
+public readonly record struct JiraTaskAlertDetails
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="JiraIssueInfo"/> class.
+    /// Initializes a new instance of the <see cref="JiraTaskAlertDetails"/> struct.
     /// </summary>
-    /// <param name="statusName">Resolved status name.</param>
-    /// <param name="title">Resolved issue title.</param>
+    /// <param name="task">Jira task key.</param>
+    /// <param name="title">Jira task title.</param>
+    /// <param name="status">Jira task status.</param>
     /// <param name="requiredActionsDetails">Required Actions details text.</param>
     /// <param name="breakingChangesDetails">Breaking changes details text.</param>
-    public JiraIssueInfo(
-        JiraStatusName? statusName,
-        string title,
+    public JiraTaskAlertDetails(
+        JiraTaskReference task,
+        JiraTitleReference title,
+        JiraStatusReference status,
         string? requiredActionsDetails,
         string? breakingChangesDetails)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
-
-        StatusName = statusName;
-        Title = title.Trim();
+        Task = task;
+        Title = title;
+        Status = status;
         RequiredActionsDetails = Normalize(requiredActionsDetails);
         BreakingChangesDetails = Normalize(breakingChangesDetails);
     }
 
     /// <summary>
-    /// Resolved issue status name.
+    /// Jira task key.
     /// </summary>
-    public JiraStatusName? StatusName { get; }
+    public JiraTaskReference Task { get; }
 
     /// <summary>
-    /// Resolved issue title.
+    /// Jira task title.
     /// </summary>
-    public string Title { get; }
+    public JiraTitleReference Title { get; }
+
+    /// <summary>
+    /// Jira task status.
+    /// </summary>
+    public JiraStatusReference Status { get; }
 
     /// <summary>
     /// Required Actions details text.
@@ -47,12 +53,12 @@ public sealed class JiraIssueInfo
     public string? BreakingChangesDetails { get; }
 
     /// <summary>
-    /// Whether issue has non-empty Required Actions field.
+    /// Whether Required Actions details are present.
     /// </summary>
     public bool HasRequiredActions => !string.IsNullOrWhiteSpace(RequiredActionsDetails);
 
     /// <summary>
-    /// Whether issue has non-empty Breaking changes field.
+    /// Whether Breaking changes details are present.
     /// </summary>
     public bool HasBreakingChanges => !string.IsNullOrWhiteSpace(BreakingChangesDetails);
 

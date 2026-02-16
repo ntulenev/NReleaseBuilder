@@ -159,9 +159,8 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
                 columns.ConstantColumn(24);
                 columns.RelativeColumn(2.2f);
                 columns.RelativeColumn(2.4f);
+                columns.RelativeColumn(1.6f);
                 columns.RelativeColumn(1.4f);
-                columns.RelativeColumn(1.4f);
-                columns.RelativeColumn(4.8f);
             });
 
             table.Header(header =>
@@ -169,9 +168,8 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
                 _ = header.Cell().Element(StylePdfHeaderCell).Text("#");
                 _ = header.Cell().Element(StylePdfHeaderCell).Text("Component");
                 _ = header.Cell().Element(StylePdfHeaderCell).Text("Repository");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Current");
+                _ = header.Cell().Element(StylePdfHeaderCell).Text("Current Version");
                 _ = header.Cell().Element(StylePdfHeaderCell).Text("Status");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Newer Versions");
             });
 
             foreach (var row in rows)
@@ -181,57 +179,263 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
                 _ = table.Cell().Element(StylePdfBodyCell).Text(row.Repository.Value);
                 _ = table.Cell().Element(StylePdfBodyCell).Text(row.CurrentVersion.Value);
                 _ = table.Cell().Element(StylePdfBodyCell).Text(FormatStatusPlain(row.Status));
-                table.Cell().Element(StylePdfBodyCell).Column(details =>
+            }
+        });
+
+        ComposePdfOutdatedVersionsSection(column, rows);
+        ComposePdfStatusDetailsSection(column, rows);
+    }
+
+    private static void ComposePdfOutdatedVersionsSection(
+        ColumnDescriptor column,
+        IReadOnlyList<ComponentCheckRow> rows)
+    {
+        var outdatedRows = rows
+            .Where(static row => row.Status == CheckStatus.Outdated && row.NewerVersions.Count > 0)
+            .ToArray();
+
+        if (outdatedRows.Length == 0)
+        {
+            return;
+        }
+
+        _ = column.Item().Text("Outdated Components - Newer Versions").Bold().FontSize(11);
+
+        foreach (var row in outdatedRows)
+        {
+            column.Item().Column(details =>
+            {
+                details.Spacing(2);
+
+                _ = details
+                    .Item()
+                    .PaddingTop(4)
+                    .Text(
+                        string.Format(
+                            CultureInfo.InvariantCulture,
+                            "{0}. {1} ({2})",
+                            row.Index.Value,
+                            row.Component.Value,
+                            row.Repository.Value))
+                    .Bold();
+
+                _ = details
+                    .Item()
+                    .Text(BuildAheadCounterLabel(row.NewerVersions.Count, row.CurrentVersion.Value))
+                    .Bold()
+                    .FontColor(ResolveAheadCounterHexColor(row.NewerVersions.Count));
+
+                details.Item().Table(table =>
                 {
-                    _ = details
-                        .Item()
-                        .Text(BuildAheadCounterLabel(row.NewerVersions.Count))
-                        .Bold()
-                        .FontColor(ResolveAheadCounterHexColor(row.NewerVersions.Count));
-
-                    if (row.NewerVersions.Count == 0)
+                    table.ColumnsDefinition(columns =>
                     {
-                        _ = details.Item().Text(row.DetailsMessage.Value);
-                        return;
-                    }
+                        columns.RelativeColumn(1.2f);
+                        columns.RelativeColumn(1.8f);
+                        columns.RelativeColumn(3.0f);
+                        columns.RelativeColumn(2.0f);
+                        columns.ConstantColumn(55);
+                    });
 
-                    _ = details.Item().Text("Version | JiraTask | JiraStatus | Alerts").FontColor("#6b7280");
+                    table.Header(header =>
+                    {
+                        _ = header.Cell().Element(StylePdfHeaderCell).Text("Version");
+                        _ = header.Cell().Element(StylePdfHeaderCell).Text("JiraTask");
+                        _ = header.Cell().Element(StylePdfHeaderCell).Text("JiraTitle");
+                        _ = header.Cell().Element(StylePdfHeaderCell).Text("JiraStatus");
+                        _ = header.Cell().Element(StylePdfHeaderCell).Text("Alerts");
+                    });
 
                     foreach (var version in row.NewerVersions)
                     {
-                        details.Item().Text(text =>
+                        _ = table.Cell().Element(StylePdfBodyCell).Text(version.Version.Value);
+                        _ = table.Cell().Element(StylePdfBodyCell).Text(version.JiraTask.Value);
+                        _ = table.Cell().Element(StylePdfBodyCell).Text(version.JiraTitle.Value);
+                        _ = table.Cell().Element(StylePdfBodyCell).Text(version.JiraStatus.Value);
+                        table.Cell().Element(StylePdfBodyCell).Text(text =>
                         {
-                            _ = text.Span(
-                                version.Version.Value
-                                + " | "
-                                + version.JiraTask.Value
-                                + " | "
-                                + version.JiraStatus.Value
-                                + " | ");
-
-                            if (!version.HasRequiredActions && !version.HasBreakingChanges)
+                            if (!version.HasRequiredActions && !version.HasBreakingChanges && !version.HasDependencyIssues)
                             {
                                 _ = text.Span("-").FontColor("#6b7280");
                                 return;
                             }
 
+                            var hasAnyLabel = false;
+
                             if (version.HasRequiredActions)
                             {
                                 _ = text.Span("RA").Bold().FontColor("#ffaf00");
+                                hasAnyLabel = true;
                             }
 
                             if (version.HasBreakingChanges)
                             {
-                                if (version.HasRequiredActions)
+                                if (hasAnyLabel)
                                 {
                                     _ = text.Span(" ");
                                 }
 
                                 _ = text.Span("BC").Bold().FontColor("#ff0000");
+                                hasAnyLabel = true;
+                            }
+
+                            if (version.HasDependencyIssues)
+                            {
+                                if (hasAnyLabel)
+                                {
+                                    _ = text.Span(" ");
+                                }
+
+                                _ = text.Span("D").Bold().FontColor("#00afff");
                             }
                         });
                     }
                 });
+
+                ComposePdfReleaseAlertDetailsSection(details, row.NewerVersions);
+            });
+        }
+    }
+
+    private static void ComposePdfReleaseAlertDetailsSection(
+        ColumnDescriptor column,
+        IReadOnlyList<VersionJiraRow> versions)
+    {
+        var detailsByTask = BuildTaskAlertDetailsByTask(versions);
+
+        var breakingChanges = detailsByTask
+            .Where(static detail => HasDetails(detail.BreakingChangesDetails))
+            .ToArray();
+        var requiredActions = detailsByTask
+            .Where(static detail => HasDetails(detail.RequiredActionsDetails))
+            .ToArray();
+
+        if (breakingChanges.Length == 0 && requiredActions.Length == 0)
+        {
+            return;
+        }
+
+        ComposePdfReleaseAlertGroup(
+            column,
+            "Breaking Changes",
+            breakingChanges,
+            static detail => detail.BreakingChangesDetails ?? string.Empty);
+        ComposePdfReleaseAlertGroup(
+            column,
+            "Required Actions",
+            requiredActions,
+            static detail => detail.RequiredActionsDetails ?? string.Empty);
+    }
+
+    private static void ComposePdfReleaseAlertGroup(
+        ColumnDescriptor column,
+        string title,
+        JiraTaskAlertDetails[] taskDetails,
+        Func<JiraTaskAlertDetails, string> detailSelector)
+    {
+        if (taskDetails.Length == 0)
+        {
+            return;
+        }
+
+        _ = column.Item().PaddingTop(6).Text(title).Bold();
+
+        foreach (var taskDetail in taskDetails)
+        {
+            _ = column.Item().Text(taskDetail.Task.Value + " - " + taskDetail.Title.Value).Bold();
+            _ = column.Item().Element(StylePdfAlertDetailsBox).Text(detailSelector(taskDetail));
+        }
+    }
+
+    private static JiraTaskAlertDetails[] BuildTaskAlertDetailsByTask(IReadOnlyList<VersionJiraRow> versions)
+    {
+        var mergedByTask = new Dictionary<string, JiraTaskAlertDetails>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var version in versions)
+        {
+            foreach (var taskDetail in version.TaskAlertDetails)
+            {
+                if (!mergedByTask.TryGetValue(taskDetail.Task.Value, out var existing))
+                {
+                    mergedByTask[taskDetail.Task.Value] = taskDetail;
+                    continue;
+                }
+
+                mergedByTask[taskDetail.Task.Value] = MergeTaskAlertDetails(existing, taskDetail);
+            }
+        }
+
+        return
+        [
+            .. mergedByTask
+                .Values
+                .OrderBy(static detail => detail.Task.Value, StringComparer.OrdinalIgnoreCase)
+        ];
+    }
+
+    private static JiraTaskAlertDetails MergeTaskAlertDetails(
+        JiraTaskAlertDetails current,
+        JiraTaskAlertDetails candidate)
+    {
+        var title = string.Equals(current.Title.Value, "N/A", StringComparison.OrdinalIgnoreCase)
+            ? candidate.Title
+            : current.Title;
+        var status = string.Equals(current.Status.Value, "N/A", StringComparison.OrdinalIgnoreCase)
+            ? candidate.Status
+            : current.Status;
+        var requiredActionsDetails = HasDetails(current.RequiredActionsDetails)
+            ? current.RequiredActionsDetails
+            : candidate.RequiredActionsDetails;
+        var breakingChangesDetails = HasDetails(current.BreakingChangesDetails)
+            ? current.BreakingChangesDetails
+            : candidate.BreakingChangesDetails;
+
+        return new JiraTaskAlertDetails(
+            current.Task,
+            title,
+            status,
+            requiredActionsDetails,
+            breakingChangesDetails);
+    }
+
+    private static void ComposePdfStatusDetailsSection(
+        ColumnDescriptor column,
+        IReadOnlyList<ComponentCheckRow> rows)
+    {
+        var rowsWithDetails = rows
+            .Where(static row => HasDetails(row.DetailsMessage.Value))
+            .ToArray();
+
+        if (rowsWithDetails.Length == 0)
+        {
+            return;
+        }
+
+        _ = column.Item().Text("Status Details").Bold().FontSize(11);
+
+        column.Item().Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.ConstantColumn(24);
+                columns.RelativeColumn(2.2f);
+                columns.RelativeColumn(1.4f);
+                columns.RelativeColumn(4.4f);
+            });
+
+            table.Header(header =>
+            {
+                _ = header.Cell().Element(StylePdfHeaderCell).Text("#");
+                _ = header.Cell().Element(StylePdfHeaderCell).Text("Component");
+                _ = header.Cell().Element(StylePdfHeaderCell).Text("Status");
+                _ = header.Cell().Element(StylePdfHeaderCell).Text("Details");
+            });
+
+            foreach (var row in rowsWithDetails)
+            {
+                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Index.Value.ToString(CultureInfo.InvariantCulture));
+                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Component.Value);
+                _ = table.Cell().Element(StylePdfBodyCell).Text(FormatStatusPlain(row.Status));
+                _ = table.Cell().Element(StylePdfBodyCell).Text(row.DetailsMessage.Value);
             }
         });
     }
@@ -295,6 +499,14 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
             .PaddingHorizontal(6)
             .PaddingVertical(4);
 
+    private static QContainer StylePdfAlertDetailsBox(QContainer container) =>
+        container
+            .Border(1)
+            .BorderColor("#d1d5db")
+            .Background("#f9fafb")
+            .PaddingHorizontal(6)
+            .PaddingVertical(5);
+
     private static string FormatStatusPlain(CheckStatus status)
     {
         return status switch
@@ -308,11 +520,12 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
         };
     }
 
-    private static string BuildAheadCounterLabel(int newerVersionCount)
+    private static string BuildAheadCounterLabel(int newerVersionCount, string currentVersion)
     {
-        return newerVersionCount == 1
+        var aheadLabel = newerVersionCount == 1
             ? "1 release ahead"
             : string.Format(CultureInfo.InvariantCulture, "{0} releases ahead", newerVersionCount);
+        return aheadLabel + " (current: " + currentVersion + ")";
     }
 
     private static string ResolveAheadCounterHexColor(int newerVersionCount)
@@ -324,6 +537,16 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
             <= 5 => "#ea580c",
             _ => "#b91c1c",
         };
+    }
+
+    private static bool HasDetails(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return !string.Equals(value.Trim(), "-", StringComparison.Ordinal);
     }
 
     private static Dictionary<JiraStatusName, int> BuildUniqueJiraTaskCountsByStatus(
