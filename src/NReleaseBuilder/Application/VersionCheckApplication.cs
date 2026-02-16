@@ -1,63 +1,85 @@
+using System.Text.Json;
+
+using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
-using NReleaseBuilder.Presentation;
 using NReleaseBuilder.Services;
+
+using Microsoft.Extensions.Options;
+using Microsoft.VisualBasic.FileIO;
+
 using NuGet.Versioning;
 
 namespace NReleaseBuilder.Application;
 
-public sealed class VersionCheckApplication
+/// <summary>
+/// Coordinates end-to-end component version checks and console output.
+/// </summary>
+public sealed class VersionCheckApplication : IVersionCheckApplication
 {
-    private readonly AppSettingsLoader _settingsLoader;
-    private readonly CsvComponentReader _csvReader;
-    private readonly BitbucketTagClient _bitbucketTagClient;
-    private readonly ComponentVersionChecker _versionChecker;
-    private readonly SpectreConsoleRenderer _renderer;
-
-    public VersionCheckApplication()
-        : this(
-            new AppSettingsLoader(),
-            new CsvComponentReader(),
-            new BitbucketTagClient(),
-            new ComponentVersionChecker(),
-            new SpectreConsoleRenderer())
-    {
-    }
-
+    /// <summary>
+    /// Initializes a new instance of the <see cref="VersionCheckApplication"/> class.
+    /// </summary>
+    /// <param name="csvReader">CSV reader service.</param>
+    /// <param name="bitbucketTagClient">Bitbucket tag client.</param>
+    /// <param name="versionChecker">Version comparison service.</param>
+    /// <param name="renderer">Console renderer.</param>
+    /// <param name="options">Application settings options.</param>
     public VersionCheckApplication(
-        AppSettingsLoader settingsLoader,
-        CsvComponentReader csvReader,
-        BitbucketTagClient bitbucketTagClient,
-        ComponentVersionChecker versionChecker,
-        SpectreConsoleRenderer renderer)
+        ICsvComponentReader csvReader,
+        IBitbucketTagClient bitbucketTagClient,
+        IComponentVersionChecker versionChecker,
+        IConsoleRenderer renderer,
+        IOptions<AppSettings> options)
     {
-        _settingsLoader = settingsLoader;
+        ArgumentNullException.ThrowIfNull(csvReader);
+        ArgumentNullException.ThrowIfNull(bitbucketTagClient);
+        ArgumentNullException.ThrowIfNull(versionChecker);
+        ArgumentNullException.ThrowIfNull(renderer);
+        ArgumentNullException.ThrowIfNull(options);
+
         _csvReader = csvReader;
         _bitbucketTagClient = bitbucketTagClient;
         _versionChecker = versionChecker;
         _renderer = renderer;
+        _settings = options.Value;
     }
 
+    /// <inheritdoc />
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
-        if (!_settingsLoader.TryLoad(out var settings, out var error))
-        {
-            _renderer.PrintError(error ?? "Unknown configuration error.");
-            return 1;
-        }
-
         IReadOnlyList<ComponentRow> componentRows;
         try
         {
-            componentRows = _csvReader.Read(settings.CsvFilePath);
+            componentRows = _csvReader.Read(_settings.CsvFilePath);
         }
-        catch (Exception ex)
+        catch (MalformedLineException ex)
         {
-            _renderer.PrintError($"Failed to parse CSV: {ex.Message}");
+            _renderer.PrintError(new ErrorMessage($"Failed to parse CSV: {ex.Message}"));
+            return 1;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _renderer.PrintError(new ErrorMessage($"Failed to parse CSV: {ex.Message}"));
+            return 1;
+        }
+        catch (IOException ex)
+        {
+            _renderer.PrintError(new ErrorMessage($"Failed to parse CSV: {ex.Message}"));
+            return 1;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _renderer.PrintError(new ErrorMessage($"Failed to parse CSV: {ex.Message}"));
+            return 1;
+        }
+        catch (ArgumentException ex)
+        {
+            _renderer.PrintError(new ErrorMessage($"Failed to parse CSV: {ex.Message}"));
             return 1;
         }
 
-        _renderer.RenderHeader(settings);
+        _renderer.RenderHeader(_settings);
 
         if (componentRows.Count == 0)
         {
@@ -66,11 +88,12 @@ public sealed class VersionCheckApplication
         }
 
         var repositories = componentRows
-            .Select(x => x.Repository)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(static x => new RepositoryName(x.Repository))
+            .Distinct()
             .ToArray();
 
-        var minCurrentVersionByRepository = new Dictionary<string, NuGetVersion>(StringComparer.OrdinalIgnoreCase);
+        var minCurrentVersionByRepository = new Dictionary<RepositoryName, NuGetVersion>();
+
         foreach (var row in componentRows)
         {
             if (!VersionParser.TryParse(row.Version, out var parsedVersion))
@@ -78,15 +101,18 @@ public sealed class VersionCheckApplication
                 continue;
             }
 
-            if (!minCurrentVersionByRepository.TryGetValue(row.Repository, out var minVersion) || parsedVersion < minVersion)
+            var repositoryName = new RepositoryName(row.Repository);
+
+            if (!minCurrentVersionByRepository.TryGetValue(repositoryName, out var minVersion)
+                || parsedVersion < minVersion)
             {
-                minCurrentVersionByRepository[row.Repository] = parsedVersion;
+                minCurrentVersionByRepository[repositoryName] = parsedVersion;
             }
         }
 
         _renderer.PrintRepositoryCheckCount(repositories.Length);
 
-        Dictionary<string, RepositoryTagLookup> tagLookups;
+        Dictionary<RepositoryName, RepositoryTagLookup> tagLookups;
         try
         {
             tagLookups = await _renderer
@@ -95,59 +121,67 @@ public sealed class VersionCheckApplication
                     progress => _bitbucketTagClient.FetchRepositoryTagLookupsAsync(
                         repositories,
                         minCurrentVersionByRepository,
-                        settings.Bitbucket,
-                        settings.Jira,
                         progress,
                         cancellationToken))
                 .ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
-            _renderer.PrintError($"Failed to load tags from Bitbucket: {ex.Message}");
+            _renderer.PrintError(new ErrorMessage($"Failed to load tags from Bitbucket: {ex.Message}"));
+            return 1;
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _renderer.PrintError(new ErrorMessage($"Failed to load tags from Bitbucket: {ex.Message}"));
+            return 1;
+        }
+        catch (JsonException ex)
+        {
+            _renderer.PrintError(new ErrorMessage($"Failed to load tags from Bitbucket: {ex.Message}"));
+            return 1;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _renderer.PrintError(new ErrorMessage($"Failed to load tags from Bitbucket: {ex.Message}"));
             return 1;
         }
 
         var checkRows = _versionChecker.BuildRows(componentRows, tagLookups);
-        var filteredRows = FilterRowsByAllowedJiraStatuses(checkRows, settings.Jira.AllowedTaskStatuses);
+        var allowedStatuses = BuildAllowedStatuses(_settings.Jira.AllowedTaskStatuses);
+        var filteredRows = FilterRowsByAllowedJiraStatuses(checkRows, allowedStatuses);
 
-        if (filteredRows.Count == 0)
+        if (filteredRows.Length == 0)
         {
-            _renderer.PrintNoComponentsMatchedStatusFilter(settings.Jira.AllowedTaskStatuses);
-            var statusStats = BuildStatusStatistics(checkRows);
-            _renderer.PrintStatusFilterDiagnostics(statusStats, settings.Jira.AllowedTaskStatuses);
+            _renderer.PrintNoComponentsMatchedStatusFilter(allowedStatuses);
+            var statusStatistics = BuildStatusStatistics(checkRows);
+            _renderer.PrintStatusFilterDiagnostics(statusStatistics, allowedStatuses);
             return 0;
         }
 
         _renderer.RenderTable(filteredRows);
         _renderer.RenderSummary(filteredRows);
-        _renderer.RenderSlackCopyText(filteredRows, settings.Jira.AllowedTaskStatuses);
+        _renderer.RenderSlackCopyText(filteredRows, allowedStatuses);
 
         return 0;
     }
 
-    private static IReadOnlyList<ComponentCheckRow> FilterRowsByAllowedJiraStatuses(
+    private static ComponentCheckRow[] FilterRowsByAllowedJiraStatuses(
         IReadOnlyList<ComponentCheckRow> rows,
-        IReadOnlyList<string> allowedStatuses)
+        IReadOnlyList<JiraStatusName> allowedStatuses)
     {
-        var allowed = new HashSet<string>(
-            allowedStatuses
-                .Where(static x => !string.IsNullOrWhiteSpace(x))
-                .Select(static x => x.Trim()),
-            StringComparer.OrdinalIgnoreCase);
+        var allowed = new HashSet<JiraStatusName>(allowedStatuses);
 
         if (allowed.Count == 0)
         {
-            return Array.Empty<ComponentCheckRow>();
+            return [];
         }
 
-        return rows
-            .Where(row => ComponentMatchesStatusFilter(row, allowed))
-            .ToArray();
+        return [.. rows.Where(row => ComponentMatchesStatusFilter(row, allowed))];
     }
 
     private static bool ComponentMatchesStatusFilter(
         ComponentCheckRow row,
-        IReadOnlySet<string> allowedStatuses)
+        HashSet<JiraStatusName> allowedStatuses)
     {
         var hasAnyTaskStatus = false;
 
@@ -158,9 +192,14 @@ public sealed class VersionCheckApplication
 
             foreach (var status in statuses)
             {
+                if (!JiraStatusName.TryCreate(status, out var jiraStatus))
+                {
+                    continue;
+                }
+
                 hasAnyTaskStatus = true;
 
-                if (!allowedStatuses.Contains(status))
+                if (!allowedStatuses.Contains(jiraStatus))
                 {
                     return false;
                 }
@@ -170,14 +209,49 @@ public sealed class VersionCheckApplication
         return hasAnyTaskStatus;
     }
 
-    private static IReadOnlyDictionary<string, int> BuildStatusStatistics(IReadOnlyList<ComponentCheckRow> rows)
+    private static Dictionary<JiraStatusName, int> BuildStatusStatistics(
+        IReadOnlyList<ComponentCheckRow> rows)
     {
-        return rows
-            .SelectMany(static row => row.NewerVersions)
-            .SelectMany(static version => version.JiraStatus
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Where(static status => !string.IsNullOrWhiteSpace(status))
-            .GroupBy(static status => status, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(static group => group.Key, static group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        var statistics = new Dictionary<JiraStatusName, int>();
+
+        foreach (var row in rows)
+        {
+            foreach (var version in row.NewerVersions)
+            {
+                var statuses = version.JiraStatus
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                foreach (var status in statuses)
+                {
+                    if (!JiraStatusName.TryCreate(status, out var jiraStatus))
+                    {
+                        continue;
+                    }
+
+                    _ = statistics.TryGetValue(jiraStatus, out var currentCount);
+                    statistics[jiraStatus] = currentCount + 1;
+                }
+            }
+        }
+
+        return statistics;
     }
+
+    private static JiraStatusName[] BuildAllowedStatuses(IReadOnlyList<string> configuredAllowedStatuses)
+    {
+        ArgumentNullException.ThrowIfNull(configuredAllowedStatuses);
+
+        return
+        [
+            .. configuredAllowedStatuses
+                .Select(static status => new JiraStatusName(status))
+                .Distinct()
+        ];
+    }
+
+    private readonly ICsvComponentReader _csvReader;
+    private readonly IBitbucketTagClient _bitbucketTagClient;
+    private readonly IComponentVersionChecker _versionChecker;
+    private readonly IConsoleRenderer _renderer;
+    private readonly AppSettings _settings;
 }

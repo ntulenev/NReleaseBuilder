@@ -1,12 +1,20 @@
 using Microsoft.VisualBasic.FileIO;
+
+using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Models;
 
 namespace NReleaseBuilder.Services;
 
-public sealed class CsvComponentReader
+/// <summary>
+/// CSV reader for extracting component, repository and version information.
+/// </summary>
+public sealed class CsvComponentReader : ICsvComponentReader
 {
+    /// <inheritdoc />
     public IReadOnlyList<ComponentRow> Read(string csvFilePath)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(csvFilePath);
+
         var rows = new HashSet<ComponentRow>();
 
         using var parser = new TextFieldParser(csvFilePath);
@@ -50,12 +58,13 @@ public sealed class CsvComponentReader
                 continue;
             }
 
-            rows.Add(new ComponentRow(component, repository, version));
+            _ = rows.Add(new ComponentRow(component, repository, version));
         }
 
-        return rows
-            .OrderBy(x => x.Component, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        return
+        [
+            .. rows.OrderBy(x => x.Component, StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     private static int FindHeaderIndex(string[] headers, string headerName)

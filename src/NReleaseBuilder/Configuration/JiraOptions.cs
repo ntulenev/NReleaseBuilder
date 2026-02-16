@@ -1,15 +1,81 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace NReleaseBuilder.Configuration;
 
+/// <summary>
+/// Configuration settings for Jira API access.
+/// </summary>
 public sealed class JiraOptions
 {
-    public string BaseUrl { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
-    public string ApiToken { get; set; } = string.Empty;
-    public IReadOnlyList<string> AllowedTaskStatuses { get; set; } = [];
-    public int MaxParallelRequests { get; set; } = 2;
+    /// <summary>
+    /// Base Jira URL.
+    /// </summary>
+    [Required]
+    public required Uri BaseUrl { get; init; }
 
-    // Backward-compatible aliases.
-    public string AuthEmail { get; set; } = string.Empty;
-    public string AuthApiToken { get; set; } = string.Empty;
-    public int RetryCount { get; set; } = 2;
+    /// <summary>
+    /// Jira authentication email.
+    /// </summary>
+    public string Email { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Jira authentication token.
+    /// </summary>
+    public string ApiToken { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Allowed Jira statuses for all tasks attached to newer versions.
+    /// </summary>
+    [MinLength(1)]
+    public IReadOnlyList<string> AllowedTaskStatuses { get; init; } = [];
+
+    /// <summary>
+    /// Number of retries for transient Jira errors.
+    /// </summary>
+    [Range(0, 10)]
+    public int RetryCount { get; init; } = 2;
+
+    /// <summary>
+    /// Maximum number of parallel Jira requests.
+    /// </summary>
+    [Range(1, 20)]
+    public int MaxParallelRequests { get; init; } = 2;
+
+    /// <summary>
+    /// Backward-compatible alias for <see cref="Email"/>.
+    /// </summary>
+    public string AuthEmail { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Backward-compatible alias for <see cref="ApiToken"/>.
+    /// </summary>
+    public string AuthApiToken { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Resolves email from current and backward-compatible fields.
+    /// </summary>
+    /// <returns>Trimmed authentication email value.</returns>
+    public string ResolveAuthEmail()
+    {
+        if (!string.IsNullOrWhiteSpace(Email))
+        {
+            return Email.Trim();
+        }
+
+        return AuthEmail.Trim();
+    }
+
+    /// <summary>
+    /// Resolves token from current and backward-compatible fields.
+    /// </summary>
+    /// <returns>Trimmed authentication token value.</returns>
+    public string ResolveAuthApiToken()
+    {
+        if (!string.IsNullOrWhiteSpace(ApiToken))
+        {
+            return ApiToken.Trim();
+        }
+
+        return AuthApiToken.Trim();
+    }
 }

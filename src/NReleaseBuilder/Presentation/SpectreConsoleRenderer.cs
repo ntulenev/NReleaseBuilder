@@ -1,15 +1,25 @@
+using System.Globalization;
+using System.Text;
+
+using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
+
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Text;
 
 namespace NReleaseBuilder.Presentation;
 
-public sealed class SpectreConsoleRenderer
+/// <summary>
+/// Spectre.Console renderer for application output.
+/// </summary>
+public sealed class SpectreConsoleRenderer : IConsoleRenderer
 {
+    /// <inheritdoc />
     public void RenderHeader(AppSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         AnsiConsole.Write(new Rule("[bold deepskyblue1]Components Version Check[/]").RuleStyle("grey").LeftJustified());
         AnsiConsole.MarkupLine($"[grey]Source:[/] [silver]{Markup.Escape(settings.CsvFilePath)}[/]");
         AnsiConsole.MarkupLine($"[grey]Workspace:[/] [silver]{Markup.Escape(settings.Bitbucket.Workspace)}[/]");
@@ -20,17 +30,21 @@ public sealed class SpectreConsoleRenderer
         AnsiConsole.WriteLine();
     }
 
+    /// <inheritdoc />
     public void PrintRepositoryCheckCount(int repositoryCount)
     {
         AnsiConsole.MarkupLine($"[grey]Checking Bitbucket tags for {repositoryCount} repositories...[/]");
     }
 
+    /// <inheritdoc />
     public async Task<T> RunBitbucketLoadingWithProgressAsync<T>(
-        IReadOnlyList<string> repositories,
+        IReadOnlyList<RepositoryName> repositories,
         Func<BitbucketProgressCallbacks, Task<T>> operation)
     {
+        ArgumentNullException.ThrowIfNull(repositories);
+        ArgumentNullException.ThrowIfNull(operation);
+
         T? result = default;
-        Exception? error = null;
 
         await AnsiConsole.Progress()
             .AutoClear(false)
@@ -44,7 +58,7 @@ public sealed class SpectreConsoleRenderer
             {
                 var sync = new object();
                 var escapedRepositories = repositories
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Distinct()
                     .ToArray();
 
                 var repositoryOverallTask = context.AddTask(
@@ -68,6 +82,11 @@ public sealed class SpectreConsoleRenderer
                         perRepositoryTasks[repository] = task;
                         return task;
                     }
+                }
+
+                foreach (var repository in escapedRepositories)
+                {
+                    _ = GetOrCreateRepositoryTask(repository.Value);
                 }
 
                 var callbacks = new BitbucketProgressCallbacks
@@ -136,57 +155,53 @@ public sealed class SpectreConsoleRenderer
                     },
                 };
 
-                try
-                {
-                    result = await operation(callbacks).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    error = ex;
-                }
+                result = await operation(callbacks).ConfigureAwait(false);
             }).ConfigureAwait(false);
 
-        if (error is not null)
-        {
-            throw error;
-        }
-
-        return result!;
+        return result is not null
+            ? result
+            : throw new InvalidOperationException("Operation completed without returning a result.");
     }
 
+    /// <inheritdoc />
     public void PrintNoRows()
     {
         AnsiConsole.MarkupLine("[yellow]No rows found in CSV.[/]");
     }
 
-    public void PrintNoComponentsMatchedStatusFilter(IReadOnlyList<string> statuses)
+    /// <inheritdoc />
+    public void PrintNoComponentsMatchedStatusFilter(IReadOnlyList<JiraStatusName> statuses)
     {
-        var label = statuses is null || statuses.Count == 0
+        ArgumentNullException.ThrowIfNull(statuses);
+
+        var label = statuses.Count == 0
             ? "configured statuses"
-            : string.Join(", ", statuses);
+            : string.Join(", ", statuses.Select(static x => x.Value));
         AnsiConsole.MarkupLine($"[yellow]No components matched Jira status filter:[/] [grey]{Markup.Escape(label)}[/]");
     }
 
+    /// <inheritdoc />
     public void PrintStatusFilterDiagnostics(
-        IReadOnlyDictionary<string, int> statusStatistics,
-        IReadOnlyList<string> allowedStatuses)
+        IReadOnlyDictionary<JiraStatusName, int> statusStatistics,
+        IReadOnlyList<JiraStatusName> allowedStatuses)
     {
+        ArgumentNullException.ThrowIfNull(statusStatistics);
+        ArgumentNullException.ThrowIfNull(allowedStatuses);
+
         if (statusStatistics.Count == 0)
         {
             AnsiConsole.MarkupLine("[grey]No Jira statuses were resolved for newer versions.[/]");
             return;
         }
 
-        var allowed = new HashSet<string>(
-            allowedStatuses.Where(static x => !string.IsNullOrWhiteSpace(x)).Select(static x => x.Trim()),
-            StringComparer.OrdinalIgnoreCase);
+        var allowed = new HashSet<JiraStatusName>(allowedStatuses);
 
         var topDisallowed = statusStatistics
             .Where(x => !allowed.Contains(x.Key))
             .OrderByDescending(static x => x.Value)
-            .ThenBy(static x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static x => x.Key)
             .Take(8)
-            .Select(static x => $"{x.Key} ({x.Value})")
+            .Select(static x => string.Format(CultureInfo.InvariantCulture, "{0} ({1})", x.Key.Value, x.Value))
             .ToArray();
 
         if (topDisallowed.Length == 0)
@@ -198,24 +213,27 @@ public sealed class SpectreConsoleRenderer
         AnsiConsole.MarkupLine($"[grey]Top disallowed statuses:[/] {Markup.Escape(string.Join(", ", topDisallowed))}");
     }
 
+    /// <inheritdoc />
     public void RenderTable(IReadOnlyList<ComponentCheckRow> rows)
     {
+        ArgumentNullException.ThrowIfNull(rows);
+
         var table = new Table()
             .Border(TableBorder.Rounded)
             .BorderColor(Color.Grey)
             .Expand();
 
-        table.AddColumn(new TableColumn("[bold]#[/]").RightAligned());
-        table.AddColumn(new TableColumn("[bold deepskyblue1]Component[/]"));
-        table.AddColumn(new TableColumn("[bold springgreen2]Repository[/]"));
-        table.AddColumn(new TableColumn("[bold gold1]Current[/]").NoWrap());
-        table.AddColumn(new TableColumn("[bold]Status[/]").NoWrap());
-        table.AddColumn(new TableColumn("[bold]Newer Versions[/]"));
+        _ = table.AddColumn(new TableColumn("[bold]#[/]").RightAligned());
+        _ = table.AddColumn(new TableColumn("[bold deepskyblue1]Component[/]"));
+        _ = table.AddColumn(new TableColumn("[bold springgreen2]Repository[/]"));
+        _ = table.AddColumn(new TableColumn("[bold gold1]Current[/]").NoWrap());
+        _ = table.AddColumn(new TableColumn("[bold]Status[/]").NoWrap());
+        _ = table.AddColumn(new TableColumn("[bold]Newer Versions[/]"));
 
         for (var i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
-            table.AddRow(
+            _ = table.AddRow(
                 new Markup($"[grey]{i + 1}[/]"),
                 new Markup(Markup.Escape(row.Component)),
                 new Markup(Markup.Escape(row.Repository)),
@@ -227,8 +245,11 @@ public sealed class SpectreConsoleRenderer
         AnsiConsole.Write(table);
     }
 
+    /// <inheritdoc />
     public void RenderSummary(IReadOnlyList<ComponentCheckRow> rows)
     {
+        ArgumentNullException.ThrowIfNull(rows);
+
         var upToDate = rows.Count(x => x.Status == CheckStatus.UpToDate);
         var outdated = rows.Count(x => x.Status == CheckStatus.Outdated);
         var notFound = rows.Count(x => x.Status == CheckStatus.RepositoryNotFound);
@@ -256,26 +277,39 @@ public sealed class SpectreConsoleRenderer
         }
     }
 
-    public void RenderSlackCopyText(IReadOnlyList<ComponentCheckRow> rows, IReadOnlyList<string> allowedStatuses)
+    /// <inheritdoc />
+    public void RenderSlackCopyText(
+        IReadOnlyList<ComponentCheckRow> rows,
+        IReadOnlyList<JiraStatusName> allowedStatuses)
     {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(allowedStatuses);
+
         if (rows.Count == 0)
         {
             return;
         }
 
         var builder = new StringBuilder();
-        builder.AppendLine("Slack copy:");
-        builder.AppendLine($"Jira filter: {string.Join(", ", allowedStatuses)}");
-        builder.AppendLine();
+        _ = builder.AppendLine("Slack copy:");
+        _ = builder.AppendLine("Jira filter: " + string.Join(", ", allowedStatuses.Select(static x => x.Value)));
+        _ = builder.AppendLine();
 
         for (var i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
-            builder.AppendLine($"{i + 1}. {row.Component} | {row.Repository} | current {row.CurrentVersion}");
+            _ = builder.AppendLine(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}. {1} | {2} | current {3}",
+                    i + 1,
+                    row.Component,
+                    row.Repository,
+                    row.CurrentVersion));
 
             if (row.NewerVersions.Count == 0)
             {
-                builder.AppendLine("   - no newer versions");
+                _ = builder.AppendLine("   - no newer versions");
                 continue;
             }
 
@@ -283,7 +317,8 @@ public sealed class SpectreConsoleRenderer
             {
                 var jiraTask = string.IsNullOrWhiteSpace(version.JiraTask) ? "N/A" : version.JiraTask;
                 var jiraStatus = string.IsNullOrWhiteSpace(version.JiraStatus) ? "N/A" : version.JiraStatus;
-                builder.AppendLine($"   - {version.Version} | {jiraTask} | {jiraStatus}");
+                _ = builder.AppendLine(
+                    "   - " + version.Version + " | " + jiraTask + " | " + jiraStatus);
             }
         }
 
@@ -292,9 +327,15 @@ public sealed class SpectreConsoleRenderer
         AnsiConsole.WriteLine(builder.ToString().TrimEnd());
     }
 
-    public void PrintError(string message)
+    /// <inheritdoc />
+    public void PrintError(ErrorMessage message)
     {
-        AnsiConsole.MarkupLine($"[bold red]Error:[/] {Markup.Escape(message)}");
+        if (string.IsNullOrWhiteSpace(message.Value))
+        {
+            throw new ArgumentException("Error message must not be empty.", nameof(message));
+        }
+
+        AnsiConsole.MarkupLine($"[bold red]Error:[/] {Markup.Escape(message.Value)}");
     }
 
     private static string FormatStatus(CheckStatus status)
@@ -322,15 +363,15 @@ public sealed class SpectreConsoleRenderer
             .BorderColor(Color.Grey37)
             .Expand();
 
-        subTable.AddColumn(new TableColumn("[grey]Version[/]").NoWrap());
-        subTable.AddColumn(new TableColumn("[grey]JiraTask[/]"));
-        subTable.AddColumn(new TableColumn("[grey]JiraStatus[/]"));
+        _ = subTable.AddColumn(new TableColumn("[grey]Version[/]").NoWrap());
+        _ = subTable.AddColumn(new TableColumn("[grey]JiraTask[/]"));
+        _ = subTable.AddColumn(new TableColumn("[grey]JiraStatus[/]"));
 
         foreach (var item in row.NewerVersions)
         {
             var jiraTask = string.IsNullOrWhiteSpace(item.JiraTask) ? "N/A" : item.JiraTask;
             var jiraStatus = string.IsNullOrWhiteSpace(item.JiraStatus) ? "N/A" : item.JiraStatus;
-            subTable.AddRow(Markup.Escape(item.Version), Markup.Escape(jiraTask), Markup.Escape(jiraStatus));
+            _ = subTable.AddRow(Markup.Escape(item.Version), Markup.Escape(jiraTask), Markup.Escape(jiraStatus));
         }
 
         return subTable;

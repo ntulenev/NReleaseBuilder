@@ -1,29 +1,63 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Text;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Collections.Concurrent;
+
+using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
+
+using Microsoft.Extensions.Options;
+
 using NuGet.Versioning;
 
 namespace NReleaseBuilder.Services;
 
-public sealed class BitbucketTagClient
+/// <summary>
+/// Bitbucket/Jira data loader for repository tags and Jira status enrichment.
+/// </summary>
+public sealed class BitbucketTagClient : IBitbucketTagClient
 {
-    public async Task<Dictionary<string, RepositoryTagLookup>> FetchRepositoryTagLookupsAsync(
-        IReadOnlyList<string> repositories,
-        IReadOnlyDictionary<string, NuGetVersion> minCurrentVersionsByRepository,
-        BitbucketOptions options,
-        JiraOptions jiraOptions,
+    /// <summary>
+    /// Initializes a new instance of the <see cref="BitbucketTagClient"/> class.
+    /// </summary>
+    /// <param name="httpClientFactory">HTTP client factory.</param>
+    /// <param name="options">Application settings options.</param>
+    public BitbucketTagClient(IHttpClientFactory httpClientFactory, IOptions<AppSettings> options)
+    {
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var appSettings = options.Value;
+        ArgumentNullException.ThrowIfNull(appSettings);
+        ArgumentNullException.ThrowIfNull(appSettings.Bitbucket);
+        ArgumentNullException.ThrowIfNull(appSettings.Jira);
+
+        _httpClientFactory = httpClientFactory;
+        _bitbucketOptions = appSettings.Bitbucket;
+        _jiraOptions = appSettings.Jira;
+    }
+
+    /// <inheritdoc />
+    public async Task<Dictionary<RepositoryName, RepositoryTagLookup>> FetchRepositoryTagLookupsAsync(
+        IReadOnlyList<RepositoryName> repositories,
+        IReadOnlyDictionary<RepositoryName, NuGetVersion> minCurrentVersionsByRepository,
         BitbucketProgressCallbacks? progress,
         CancellationToken cancellationToken)
     {
-        using var httpClient = BuildBitbucketHttpClient(options);
-        using var jiraHttpClient = BuildJiraHttpClient(jiraOptions);
-        using var semaphore = new SemaphoreSlim(options.MaxParallelRequests, options.MaxParallelRequests);
-        using var jiraSemaphore = new SemaphoreSlim(jiraOptions.MaxParallelRequests, jiraOptions.MaxParallelRequests);
+        ArgumentNullException.ThrowIfNull(repositories);
+        ArgumentNullException.ThrowIfNull(minCurrentVersionsByRepository);
+
+        var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
+        var jiraHttpClient = _httpClientFactory.CreateClient(HttpClientNames.JIRA);
+        using var semaphore = new SemaphoreSlim(
+            _bitbucketOptions.MaxParallelRequests,
+            _bitbucketOptions.MaxParallelRequests);
+        using var jiraSemaphore = new SemaphoreSlim(
+            _jiraOptions.MaxParallelRequests,
+            _jiraOptions.MaxParallelRequests);
         var jiraStatusCacheByTask = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var tasks = repositories.Select(async repository =>
@@ -31,14 +65,14 @@ public sealed class BitbucketTagClient
             await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                progress?.RepositoryStarted?.Invoke(repository);
+                progress?.RepositoryStarted?.Invoke(repository.Value);
 
-                minCurrentVersionsByRepository.TryGetValue(repository, out var minCurrentVersion);
+                _ = minCurrentVersionsByRepository.TryGetValue(repository, out var minCurrentVersion);
                 var lookup = await GetRepositoryTagLookupAsync(
                         httpClient,
                         jiraHttpClient,
-                        options,
-                        jiraOptions,
+                        _bitbucketOptions,
+                        _jiraOptions,
                         repository,
                         minCurrentVersion,
                         jiraStatusCacheByTask,
@@ -51,60 +85,13 @@ public sealed class BitbucketTagClient
             }
             finally
             {
-                progress?.RepositoryCompleted?.Invoke(repository);
-                semaphore.Release();
+                progress?.RepositoryCompleted?.Invoke(repository.Value);
+                _ = semaphore.Release();
             }
         }).ToArray();
 
         var pairs = await Task.WhenAll(tasks).ConfigureAwait(false);
-        return pairs.ToDictionary(x => x.Repository, x => x.Lookup, StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static HttpClient BuildBitbucketHttpClient(BitbucketOptions options)
-    {
-        var baseUrl = options.BaseUrl.Trim();
-        if (!baseUrl.EndsWith('/'))
-        {
-            baseUrl += "/";
-        }
-
-        var httpClient = new HttpClient
-        {
-            BaseAddress = new Uri(baseUrl, UriKind.Absolute),
-        };
-
-        var raw = $"{options.AuthEmail}:{options.AuthApiToken}";
-        var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
-
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", auth);
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        return httpClient;
-    }
-
-    private static HttpClient BuildJiraHttpClient(JiraOptions jiraOptions)
-    {
-        var baseUrl = jiraOptions.BaseUrl.Trim();
-        if (!baseUrl.EndsWith('/'))
-        {
-            baseUrl += "/";
-        }
-
-        var authEmail = ResolveJiraEmail(jiraOptions);
-        var authApiToken = ResolveJiraApiToken(jiraOptions);
-
-        var httpClient = new HttpClient
-        {
-            BaseAddress = new Uri(baseUrl, UriKind.Absolute),
-        };
-
-        var raw = $"{authEmail}:{authApiToken}";
-        var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
-
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", auth);
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        return httpClient;
+        return pairs.ToDictionary(x => x.Repository, x => x.Lookup);
     }
 
     private static async Task<RepositoryTagLookup> GetRepositoryTagLookupAsync(
@@ -112,7 +99,7 @@ public sealed class BitbucketTagClient
         HttpClient jiraHttpClient,
         BitbucketOptions options,
         JiraOptions jiraOptions,
-        string repository,
+        RepositoryName repository,
         NuGetVersion? minCurrentVersion,
         ConcurrentDictionary<string, string> jiraStatusCacheByTask,
         SemaphoreSlim jiraSemaphore,
@@ -122,7 +109,7 @@ public sealed class BitbucketTagClient
         var tags = new List<(string Name, string? CommitHash)>();
 
         Uri? next = new(
-            $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository)}/refs/tags?pagelen={options.PageLen}",
+            $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository.Value)}/refs/tags?pagelen={options.PageLen}",
             UriKind.Relative);
 
         while (next is not null)
@@ -151,7 +138,7 @@ public sealed class BitbucketTagClient
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             var page = await JsonSerializer.DeserializeAsync<TagPageDto>(
                 stream,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                _jsonSerializerOptions,
                 cancellationToken).ConfigureAwait(false);
 
             if (page?.Values is not null)
@@ -178,29 +165,29 @@ public sealed class BitbucketTagClient
                 || (VersionParser.TryParse(tag.Name, out var parsedVersion) && parsedVersion > minCurrentVersion))
             .ToArray();
 
-        progress?.CommitTotalDetected?.Invoke(repository, tagsToInspect.Length);
+        progress?.CommitTotalDetected?.Invoke(repository.Value, tagsToInspect.Length);
 
         var jiraCacheByCommit = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var enrichedTags = new List<RepositoryTagInfo>(tagsToInspect.Length);
 
-        foreach (var tag in tagsToInspect)
+        foreach (var (name, commitHash) in tagsToInspect)
         {
             var jiraTask = "N/A";
             var jiraStatus = "N/A";
 
-            if (!string.IsNullOrWhiteSpace(tag.CommitHash))
+            if (!string.IsNullOrWhiteSpace(commitHash))
             {
-                if (!jiraCacheByCommit.TryGetValue(tag.CommitHash, out jiraTask))
+                if (!jiraCacheByCommit.TryGetValue(commitHash, out jiraTask))
                 {
                     var message = await TryGetCommitMessageAsync(
                         httpClient,
                         options,
                         repository,
-                        tag.CommitHash,
+                        commitHash,
                         cancellationToken).ConfigureAwait(false);
 
                     jiraTask = ExtractJiraTask(message, options.ProjectName);
-                    jiraCacheByCommit[tag.CommitHash] = jiraTask;
+                    jiraCacheByCommit[commitHash] = jiraTask;
                 }
             }
 
@@ -212,42 +199,22 @@ public sealed class BitbucketTagClient
                 jiraSemaphore,
                 cancellationToken).ConfigureAwait(false);
 
-            enrichedTags.Add(new RepositoryTagInfo(tag.Name, jiraTask, jiraStatus));
-            progress?.CommitProcessed?.Invoke(repository);
+            enrichedTags.Add(new RepositoryTagInfo(name, jiraTask, jiraStatus));
+            progress?.CommitProcessed?.Invoke(repository.Value);
         }
 
         return RepositoryTagLookup.Success(enrichedTags);
     }
 
-    private static string ResolveJiraEmail(JiraOptions jiraOptions)
-    {
-        if (!string.IsNullOrWhiteSpace(jiraOptions.Email))
-        {
-            return jiraOptions.Email.Trim();
-        }
-
-        return jiraOptions.AuthEmail.Trim();
-    }
-
-    private static string ResolveJiraApiToken(JiraOptions jiraOptions)
-    {
-        if (!string.IsNullOrWhiteSpace(jiraOptions.ApiToken))
-        {
-            return jiraOptions.ApiToken.Trim();
-        }
-
-        return jiraOptions.AuthApiToken.Trim();
-    }
-
     private static async Task<string?> TryGetCommitMessageAsync(
         HttpClient httpClient,
         BitbucketOptions options,
-        string repository,
+        RepositoryName repository,
         string commitHash,
         CancellationToken cancellationToken)
     {
         var commitUrl = new Uri(
-            $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository)}/commit/{Uri.EscapeDataString(commitHash)}",
+            $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash)}",
             UriKind.Relative);
 
         using var response = await GetWithRetryAsync(
@@ -264,7 +231,7 @@ public sealed class BitbucketTagClient
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         var commit = await JsonSerializer.DeserializeAsync<CommitDto>(
             stream,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+            _jsonSerializerOptions,
             cancellationToken).ConfigureAwait(false);
 
         return commit?.Message;
@@ -324,12 +291,12 @@ public sealed class BitbucketTagClient
                 }
                 finally
                 {
-                    jiraSemaphore.Release();
+                    _ = jiraSemaphore.Release();
                 }
 
                 if (!IsTransientJiraStatus(jiraStatus))
                 {
-                    jiraStatusCacheByTask.TryAdd(task, jiraStatus);
+                    _ = jiraStatusCacheByTask.TryAdd(task, jiraStatus);
                 }
             }
 
@@ -343,14 +310,16 @@ public sealed class BitbucketTagClient
     {
         if (string.IsNullOrWhiteSpace(jiraTask) || string.Equals(jiraTask, "N/A", StringComparison.OrdinalIgnoreCase))
         {
-            return Array.Empty<string>();
+            return [];
         }
 
-        return jiraTask
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(static x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        return
+        [
+            .. jiraTask
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(static x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     private static async Task<string> TryGetJiraStatusAsync(
@@ -386,7 +355,7 @@ public sealed class BitbucketTagClient
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         var issue = await JsonSerializer.DeserializeAsync<JiraIssueStatusResponseDto>(
             stream,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+            _jsonSerializerOptions,
             cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(issue?.Fields?.Status?.Name))
@@ -456,14 +425,12 @@ public sealed class BitbucketTagClient
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         var searchResult = await JsonSerializer.DeserializeAsync<JiraSearchResponseDto>(
             stream,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+            _jsonSerializerOptions,
             cancellationToken).ConfigureAwait(false);
 
-        var status = searchResult?.Issues
-            .FirstOrDefault()?
-            .Fields?
-            .Status?
-            .Name;
+        var status = searchResult is not null && searchResult.Issues.Count > 0
+            ? searchResult.Issues[0].Fields?.Status?.Name
+            : null;
 
         if (!string.IsNullOrWhiteSpace(status))
         {
@@ -543,7 +510,7 @@ public sealed class BitbucketTagClient
         }
 
         var milliseconds = Math.Min(10000, 300 * Math.Pow(2, attempt - 1));
-        milliseconds += Random.Shared.Next(100, 400);
+        milliseconds += RandomNumberGenerator.GetInt32(100, 400);
         return TimeSpan.FromMilliseconds(milliseconds);
     }
 
@@ -583,4 +550,12 @@ public sealed class BitbucketTagClient
 
         return oneLine[..maxLength] + "...";
     }
+
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly BitbucketOptions _bitbucketOptions;
+    private readonly JiraOptions _jiraOptions;
+    private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
 }

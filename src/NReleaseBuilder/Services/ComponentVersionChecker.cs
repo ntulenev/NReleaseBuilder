@@ -1,20 +1,30 @@
+using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Models;
 
 namespace NReleaseBuilder.Services;
 
-public sealed class ComponentVersionChecker
+/// <summary>
+/// Builds component check rows by comparing current and available versions.
+/// </summary>
+public sealed class ComponentVersionChecker : IComponentVersionChecker
 {
+    /// <inheritdoc />
     public IReadOnlyList<ComponentCheckRow> BuildRows(
         IReadOnlyList<ComponentRow> componentRows,
-        IReadOnlyDictionary<string, RepositoryTagLookup> tagLookups)
+        IReadOnlyDictionary<RepositoryName, RepositoryTagLookup> tagLookups)
     {
+        ArgumentNullException.ThrowIfNull(componentRows);
+        ArgumentNullException.ThrowIfNull(tagLookups);
+
         var result = new List<ComponentCheckRow>(componentRows.Count);
 
         for (var i = 0; i < componentRows.Count; i++)
         {
             var row = componentRows[i];
 
-            if (!tagLookups.TryGetValue(row.Repository, out var lookup))
+            var repositoryName = new RepositoryName(row.Repository);
+
+            if (!tagLookups.TryGetValue(repositoryName, out var lookup))
             {
                 result.Add(new ComponentCheckRow(
                     i + 1,
@@ -23,7 +33,7 @@ public sealed class ComponentVersionChecker
                     row.Version,
                     CheckStatus.BitbucketError,
                     "Repository lookup result is missing.",
-                    Array.Empty<VersionJiraRow>()));
+                    []));
                 continue;
             }
 
@@ -36,7 +46,7 @@ public sealed class ComponentVersionChecker
                     row.Version,
                     CheckStatus.RepositoryNotFound,
                     "Repository was not found in Bitbucket workspace.",
-                    Array.Empty<VersionJiraRow>()));
+                    []));
                 continue;
             }
 
@@ -49,7 +59,7 @@ public sealed class ComponentVersionChecker
                     row.Version,
                     CheckStatus.BitbucketError,
                     lookup.Error,
-                    Array.Empty<VersionJiraRow>()));
+                    []));
                 continue;
             }
 
@@ -62,7 +72,7 @@ public sealed class ComponentVersionChecker
                     row.Version,
                     CheckStatus.InvalidCurrentVersion,
                     "Current version is not a valid tag format.",
-                    Array.Empty<VersionJiraRow>()));
+                    []));
                 continue;
             }
 
@@ -84,7 +94,7 @@ public sealed class ComponentVersionChecker
                     row.Version,
                     CheckStatus.UpToDate,
                     "-",
-                    Array.Empty<VersionJiraRow>()));
+                    []));
                 continue;
             }
 

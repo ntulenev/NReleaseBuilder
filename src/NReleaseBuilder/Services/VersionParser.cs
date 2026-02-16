@@ -1,12 +1,20 @@
 using System.Text.RegularExpressions;
+
 using NuGet.Versioning;
 
 namespace NReleaseBuilder.Services;
 
-public static class VersionParser
+/// <summary>
+/// Parses semantic version values from tags and free-form text.
+/// </summary>
+public static partial class VersionParser
 {
-    private static readonly Regex VersionPattern = new(@"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", RegexOptions.Compiled);
-
+    /// <summary>
+    /// Tries to parse a <see cref="NuGetVersion"/> from a tag value.
+    /// </summary>
+    /// <param name="value">Input value.</param>
+    /// <param name="version">Parsed version when successful.</param>
+    /// <returns><see langword="true"/> when parsing succeeds; otherwise <see langword="false"/>.</returns>
     public static bool TryParse(string value, out NuGetVersion version)
     {
         version = new NuGetVersion(0, 0, 0);
@@ -28,7 +36,7 @@ public static class VersionParser
             return true;
         }
 
-        var match = VersionPattern.Match(candidate);
+        var match = VersionPatternRegex().Match(candidate);
         if (match.Success && NuGetVersion.TryParse(match.Value, out parsedVersion) && parsedVersion is not null)
         {
             version = parsedVersion;
@@ -37,4 +45,7 @@ public static class VersionParser
 
         return false;
     }
+
+    [GeneratedRegex(@"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", RegexOptions.Compiled)]
+    private static partial Regex VersionPatternRegex();
 }
