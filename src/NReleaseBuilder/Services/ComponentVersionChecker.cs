@@ -27,7 +27,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             if (!tagLookups.TryGetValue(repositoryName, out var lookup))
             {
                 result.Add(new ComponentCheckRow(
-                    i + 1,
+                    new ComponentCheckIndex(i + 1),
                     row.Component,
                     row.Repository,
                     row.Version,
@@ -40,7 +40,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             if (lookup.IsRepositoryMissing)
             {
                 result.Add(new ComponentCheckRow(
-                    i + 1,
+                    new ComponentCheckIndex(i + 1),
                     row.Component,
                     row.Repository,
                     row.Version,
@@ -53,7 +53,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             if (!string.IsNullOrWhiteSpace(lookup.Error))
             {
                 result.Add(new ComponentCheckRow(
-                    i + 1,
+                    new ComponentCheckIndex(i + 1),
                     row.Component,
                     row.Repository,
                     row.Version,
@@ -66,7 +66,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             if (!VersionParser.TryParse(row.Version, out var currentVersion))
             {
                 result.Add(new ComponentCheckRow(
-                    i + 1,
+                    new ComponentCheckIndex(i + 1),
                     row.Component,
                     row.Repository,
                     row.Version,
@@ -88,7 +88,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             if (newerVersions.Length == 0)
             {
                 result.Add(new ComponentCheckRow(
-                    i + 1,
+                    new ComponentCheckIndex(i + 1),
                     row.Component,
                     row.Repository,
                     row.Version,
@@ -99,7 +99,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             }
 
             result.Add(new ComponentCheckRow(
-                i + 1,
+                new ComponentCheckIndex(i + 1),
                 row.Component,
                 row.Repository,
                 row.Version,

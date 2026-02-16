@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
+using NReleaseBuilder.Models;
+
 namespace NReleaseBuilder.Configuration;
 
 /// <summary>
@@ -77,5 +79,21 @@ public sealed class JiraOptions
         }
 
         return AuthApiToken.Trim();
+    }
+
+    /// <summary>
+    /// Builds distinct allowed Jira statuses from configuration values.
+    /// </summary>
+    /// <returns>Distinct allowed Jira statuses.</returns>
+    public JiraStatusName[] BuildAllowedStatuses()
+    {
+        ArgumentNullException.ThrowIfNull(AllowedTaskStatuses);
+
+        return
+        [
+            .. AllowedTaskStatuses
+                .Select(static status => new JiraStatusName(status))
+                .Distinct()
+        ];
     }
 }

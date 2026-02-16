@@ -13,7 +13,19 @@ public readonly record struct JiraTaskReference
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
 
-        Value = value.Trim();
+        var normalizedValue = value.Trim();
+        var hasAtLeastOneTask = normalizedValue
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Length > 0;
+
+        if (!hasAtLeastOneTask)
+        {
+            throw new ArgumentException(
+                "Jira task reference must contain at least one task value.",
+                nameof(value));
+        }
+
+        Value = normalizedValue;
     }
 
     /// <summary>
@@ -22,8 +34,5 @@ public readonly record struct JiraTaskReference
     public string Value { get; }
 
     /// <inheritdoc />
-    public override string ToString()
-    {
-        return Value ?? string.Empty;
-    }
+    public override string ToString() => Value ?? string.Empty;
 }

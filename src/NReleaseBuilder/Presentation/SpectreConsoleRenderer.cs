@@ -31,9 +31,28 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
     }
 
     /// <inheritdoc />
-    public void PrintRepositoryCheckCount(int repositoryCount)
+    public void PrintRepositoryCheckCount(int repositoryCount) =>
+        AnsiConsole.MarkupLine($"[Grey]Checking Bitbucket tags for {repositoryCount} repositories...[/]");
+
+    /// <inheritdoc />
+    public void PrintRepositoryBatchProgress(
+        int batchNumber,
+        int totalBatchCount,
+        int processedRepositoryCount,
+        int currentBatchRepositoryCount,
+        int totalRepositoryCount)
     {
-        AnsiConsole.MarkupLine($"[grey]Checking Bitbucket tags for {repositoryCount} repositories...[/]");
+        ArgumentOutOfRangeException.ThrowIfLessThan(batchNumber, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(totalBatchCount, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(processedRepositoryCount, 0);
+        ArgumentOutOfRangeException.ThrowIfLessThan(currentBatchRepositoryCount, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(totalRepositoryCount, 1);
+
+        var from = processedRepositoryCount + 1;
+        var to = Math.Min(processedRepositoryCount + currentBatchRepositoryCount, totalRepositoryCount);
+
+        AnsiConsole.MarkupLine(
+            $"[grey]Batch {batchNumber}/{totalBatchCount}: loading repositories {from}-{to} of {totalRepositoryCount}[/]");
     }
 
     /// <inheritdoc />
@@ -164,10 +183,7 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
     }
 
     /// <inheritdoc />
-    public void PrintNoRows()
-    {
-        AnsiConsole.MarkupLine("[yellow]No rows found in CSV.[/]");
-    }
+    public void PrintNoRows() => AnsiConsole.MarkupLine("[yellow]No rows found in CSV.[/]");
 
     /// <inheritdoc />
     public void PrintNoComponentsMatchedStatusFilter(IReadOnlyList<JiraStatusName> statuses)
@@ -234,7 +250,7 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
         {
             var row = rows[i];
             _ = table.AddRow(
-                new Markup($"[grey]{i + 1}[/]"),
+                new Markup($"[grey]{row.Index.Value}[/]"),
                 new Markup(Markup.Escape(row.Component.Value)),
                 new Markup(Markup.Escape(row.Repository.Value)),
                 new Markup(Markup.Escape(row.CurrentVersion.Value)),
@@ -302,7 +318,7 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
                 string.Format(
                     CultureInfo.InvariantCulture,
                     "{0}. {1} | {2} | current {3}",
-                    i + 1,
+                    row.Index.Value,
                     row.Component.Value,
                     row.Repository.Value,
                     row.CurrentVersion.Value));

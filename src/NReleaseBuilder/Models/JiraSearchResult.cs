@@ -13,6 +13,11 @@ public sealed class JiraSearchResult
     {
         ArgumentNullException.ThrowIfNull(issues);
 
+        if (issues.Any(static issue => issue is null))
+        {
+            throw new ArgumentException("Jira issues collection must not contain null items.", nameof(issues));
+        }
+
         Issues = issues;
     }
 

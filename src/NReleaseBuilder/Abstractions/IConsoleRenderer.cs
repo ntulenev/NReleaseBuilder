@@ -21,6 +21,21 @@ public interface IConsoleRenderer
     void PrintRepositoryCheckCount(int repositoryCount);
 
     /// <summary>
+    /// Prints progress information for the current repository loading batch.
+    /// </summary>
+    /// <param name="batchNumber">Current batch number (1-based).</param>
+    /// <param name="totalBatchCount">Total batch count.</param>
+    /// <param name="processedRepositoryCount">Already processed repository count.</param>
+    /// <param name="currentBatchRepositoryCount">Repository count in current batch.</param>
+    /// <param name="totalRepositoryCount">Total repository count.</param>
+    void PrintRepositoryBatchProgress(
+        int batchNumber,
+        int totalBatchCount,
+        int processedRepositoryCount,
+        int currentBatchRepositoryCount,
+        int totalRepositoryCount);
+
+    /// <summary>
     /// Runs an asynchronous operation with Bitbucket loading progress UI.
     /// </summary>
     /// <typeparam name="T">Result type.</typeparam>

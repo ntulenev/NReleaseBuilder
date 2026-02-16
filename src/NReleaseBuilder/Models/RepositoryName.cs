@@ -40,28 +40,16 @@ public readonly struct RepositoryName : IEquatable<RepositoryName>, IComparable<
     }
 
     /// <inheritdoc />
-    public bool Equals(RepositoryName other)
-    {
-        return StringComparer.OrdinalIgnoreCase.Equals(Value, other.Value);
-    }
+    public bool Equals(RepositoryName other) => StringComparer.OrdinalIgnoreCase.Equals(Value, other.Value);
 
     /// <inheritdoc />
-    public override bool Equals(object? obj)
-    {
-        return obj is RepositoryName other && Equals(other);
-    }
+    public override bool Equals(object? obj) => obj is RepositoryName other && Equals(other);
 
     /// <inheritdoc />
-    public override int GetHashCode()
-    {
-        return StringComparer.OrdinalIgnoreCase.GetHashCode(Value ?? string.Empty);
-    }
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Value ?? string.Empty);
 
     /// <inheritdoc />
-    public int CompareTo(RepositoryName other)
-    {
-        return StringComparer.OrdinalIgnoreCase.Compare(Value, other.Value);
-    }
+    public int CompareTo(RepositoryName other) => StringComparer.OrdinalIgnoreCase.Compare(Value, other.Value);
 
     /// <summary>
     /// Checks equality between two <see cref="RepositoryName"/> values.
@@ -69,10 +57,7 @@ public readonly struct RepositoryName : IEquatable<RepositoryName>, IComparable<
     /// <param name="left">Left value.</param>
     /// <param name="right">Right value.</param>
     /// <returns><see langword="true"/> when values are equal.</returns>
-    public static bool operator ==(RepositoryName left, RepositoryName right)
-    {
-        return left.Equals(right);
-    }
+    public static bool operator ==(RepositoryName left, RepositoryName right) => left.Equals(right);
 
     /// <summary>
     /// Checks inequality between two <see cref="RepositoryName"/> values.
@@ -80,10 +65,7 @@ public readonly struct RepositoryName : IEquatable<RepositoryName>, IComparable<
     /// <param name="left">Left value.</param>
     /// <param name="right">Right value.</param>
     /// <returns><see langword="true"/> when values are not equal.</returns>
-    public static bool operator !=(RepositoryName left, RepositoryName right)
-    {
-        return !left.Equals(right);
-    }
+    public static bool operator !=(RepositoryName left, RepositoryName right) => !left.Equals(right);
 
     /// <summary>
     /// Compares whether left value is less than right value.
@@ -91,10 +73,7 @@ public readonly struct RepositoryName : IEquatable<RepositoryName>, IComparable<
     /// <param name="left">Left value.</param>
     /// <param name="right">Right value.</param>
     /// <returns><see langword="true"/> when left is less than right.</returns>
-    public static bool operator <(RepositoryName left, RepositoryName right)
-    {
-        return left.CompareTo(right) < 0;
-    }
+    public static bool operator <(RepositoryName left, RepositoryName right) => left.CompareTo(right) < 0;
 
     /// <summary>
     /// Compares whether left value is less than or equal to right value.
@@ -102,10 +81,7 @@ public readonly struct RepositoryName : IEquatable<RepositoryName>, IComparable<
     /// <param name="left">Left value.</param>
     /// <param name="right">Right value.</param>
     /// <returns><see langword="true"/> when left is less than or equal to right.</returns>
-    public static bool operator <=(RepositoryName left, RepositoryName right)
-    {
-        return left.CompareTo(right) <= 0;
-    }
+    public static bool operator <=(RepositoryName left, RepositoryName right) => left.CompareTo(right) <= 0;
 
     /// <summary>
     /// Compares whether left value is greater than right value.
@@ -113,10 +89,7 @@ public readonly struct RepositoryName : IEquatable<RepositoryName>, IComparable<
     /// <param name="left">Left value.</param>
     /// <param name="right">Right value.</param>
     /// <returns><see langword="true"/> when left is greater than right.</returns>
-    public static bool operator >(RepositoryName left, RepositoryName right)
-    {
-        return left.CompareTo(right) > 0;
-    }
+    public static bool operator >(RepositoryName left, RepositoryName right) => left.CompareTo(right) > 0;
 
     /// <summary>
     /// Compares whether left value is greater than or equal to right value.
@@ -124,14 +97,8 @@ public readonly struct RepositoryName : IEquatable<RepositoryName>, IComparable<
     /// <param name="left">Left value.</param>
     /// <param name="right">Right value.</param>
     /// <returns><see langword="true"/> when left is greater than or equal to right.</returns>
-    public static bool operator >=(RepositoryName left, RepositoryName right)
-    {
-        return left.CompareTo(right) >= 0;
-    }
+    public static bool operator >=(RepositoryName left, RepositoryName right) => left.CompareTo(right) >= 0;
 
     /// <inheritdoc />
-    public override string ToString()
-    {
-        return Value ?? string.Empty;
-    }
+    public override string ToString() => Value ?? string.Empty;
 }

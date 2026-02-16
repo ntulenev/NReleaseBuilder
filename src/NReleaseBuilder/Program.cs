@@ -48,6 +48,7 @@ builder.Services.AddHttpClient(HttpClientNames.JIRA, (sp, http) =>
 builder.Services.AddTransient<ICsvComponentReader, CsvComponentReader>();
 builder.Services.AddTransient<IBitbucketTagClient, BitbucketTagClient>();
 builder.Services.AddTransient<IComponentVersionChecker, ComponentVersionChecker>();
+builder.Services.AddTransient<IJiraStatusStatisticsBuilder, JiraStatusStatisticsBuilder>();
 builder.Services.AddTransient<IConsoleRenderer, SpectreConsoleRenderer>();
 builder.Services.AddTransient<IVersionCheckApplication, VersionCheckApplication>();
 

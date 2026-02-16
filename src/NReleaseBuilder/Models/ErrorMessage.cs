@@ -22,8 +22,5 @@ public readonly record struct ErrorMessage
     public string Value { get; }
 
     /// <inheritdoc />
-    public override string ToString()
-    {
-        return Value ?? string.Empty;
-    }
+    public override string ToString() => Value ?? string.Empty;
 }

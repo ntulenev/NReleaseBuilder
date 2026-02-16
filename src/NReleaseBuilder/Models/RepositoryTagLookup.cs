@@ -3,11 +3,47 @@ namespace NReleaseBuilder.Models;
 /// <summary>
 /// Lookup result for repository tags.
 /// </summary>
-/// <param name="IsRepositoryMissing">Whether repository does not exist.</param>
-/// <param name="Error">Error details for failed API calls.</param>
-/// <param name="Tags">Resolved tags when lookup succeeds.</param>
-public readonly record struct RepositoryTagLookup(bool IsRepositoryMissing, string? Error, IReadOnlyList<RepositoryTagInfo> Tags)
+public readonly record struct RepositoryTagLookup
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RepositoryTagLookup"/> struct.
+    /// </summary>
+    /// <param name="isRepositoryMissing">Whether repository does not exist.</param>
+    /// <param name="error">Error details for failed API calls.</param>
+    /// <param name="tags">Resolved tags when lookup succeeds.</param>
+    public RepositoryTagLookup(bool isRepositoryMissing, string? error, IReadOnlyList<RepositoryTagInfo> tags)
+    {
+        ArgumentNullException.ThrowIfNull(tags);
+
+        var normalizedError = string.IsNullOrWhiteSpace(error) ? null : error.Trim();
+
+        if (isRepositoryMissing && normalizedError is not null)
+        {
+            throw new ArgumentException(
+                "Repository-not-found lookup cannot contain an error message.",
+                nameof(error));
+        }
+
+        IsRepositoryMissing = isRepositoryMissing;
+        Error = normalizedError;
+        Tags = tags;
+    }
+
+    /// <summary>
+    /// Whether repository does not exist.
+    /// </summary>
+    public bool IsRepositoryMissing { get; }
+
+    /// <summary>
+    /// Error details for failed API calls.
+    /// </summary>
+    public string? Error { get; }
+
+    /// <summary>
+    /// Resolved tags when lookup succeeds.
+    /// </summary>
+    public IReadOnlyList<RepositoryTagInfo> Tags { get; }
+
     /// <summary>
     /// Creates lookup result for missing repository.
     /// </summary>

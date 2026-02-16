@@ -14,6 +14,11 @@ public sealed class RepositoryTagPage
     {
         ArgumentNullException.ThrowIfNull(values);
 
+        foreach (var value in values)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value.Name);
+        }
+
         Values = values;
         Next = next;
     }

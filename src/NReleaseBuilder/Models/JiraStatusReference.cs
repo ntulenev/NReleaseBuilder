@@ -13,7 +13,19 @@ public readonly record struct JiraStatusReference
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
 
-        Value = value.Trim();
+        var normalizedValue = value.Trim();
+        var hasAtLeastOneStatus = normalizedValue
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Length > 0;
+
+        if (!hasAtLeastOneStatus)
+        {
+            throw new ArgumentException(
+                "Jira status reference must contain at least one status value.",
+                nameof(value));
+        }
+
+        Value = normalizedValue;
     }
 
     /// <summary>
@@ -25,25 +37,14 @@ public readonly record struct JiraStatusReference
     /// Splits the reference into individual Jira statuses.
     /// </summary>
     /// <returns>Distinct Jira statuses.</returns>
-    public JiraStatusName[] SplitStatuses()
-    {
-        if (string.IsNullOrWhiteSpace(Value))
-        {
-            return [];
-        }
-
-        return
-        [
-            .. Value
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(static status => new JiraStatusName(status))
-                .Distinct()
-        ];
-    }
+    public JiraStatusName[] SplitStatuses() =>
+    [
+        .. Value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(static status => new JiraStatusName(status))
+            .Distinct()
+    ];
 
     /// <inheritdoc />
-    public override string ToString()
-    {
-        return Value ?? string.Empty;
-    }
+    public override string ToString() => Value ?? string.Empty;
 }
