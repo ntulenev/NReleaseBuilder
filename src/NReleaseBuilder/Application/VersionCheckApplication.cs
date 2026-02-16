@@ -88,7 +88,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
         }
 
         var repositories = componentRows
-            .Select(static x => new RepositoryName(x.Repository))
+            .Select(static x => x.Repository)
             .Distinct()
             .ToArray();
 
@@ -101,7 +101,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
                 continue;
             }
 
-            var repositoryName = new RepositoryName(row.Repository);
+            var repositoryName = row.Repository;
 
             if (!minCurrentVersionByRepository.TryGetValue(repositoryName, out var minVersion)
                 || parsedVersion < minVersion)
@@ -188,18 +188,13 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
         foreach (var newerVersion in row.NewerVersions)
         {
             var statuses = newerVersion.JiraStatus
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                .SplitStatuses();
 
             foreach (var status in statuses)
             {
-                if (!JiraStatusName.TryCreate(status, out var jiraStatus))
-                {
-                    continue;
-                }
-
                 hasAnyTaskStatus = true;
 
-                if (!allowedStatuses.Contains(jiraStatus))
+                if (!allowedStatuses.Contains(status))
                 {
                     return false;
                 }
@@ -219,17 +214,12 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
             foreach (var version in row.NewerVersions)
             {
                 var statuses = version.JiraStatus
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    .SplitStatuses();
 
                 foreach (var status in statuses)
                 {
-                    if (!JiraStatusName.TryCreate(status, out var jiraStatus))
-                    {
-                        continue;
-                    }
-
-                    _ = statistics.TryGetValue(jiraStatus, out var currentCount);
-                    statistics[jiraStatus] = currentCount + 1;
+                    _ = statistics.TryGetValue(status, out var currentCount);
+                    statistics[status] = currentCount + 1;
                 }
             }
         }

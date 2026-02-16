@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Transport;
 
 /// <summary>
 /// Jira issue response DTO.
@@ -8,7 +8,7 @@ public sealed class JiraIssueStatusResponseDto
     /// <summary>
     /// Issue fields payload.
     /// </summary>
-    public JiraIssueFieldsDto? Fields { get; set; }
+    public JiraIssueFieldsDto? Fields { get; init; }
 }
 
 /// <summary>
@@ -19,7 +19,7 @@ public sealed class JiraIssueFieldsDto
     /// <summary>
     /// Issue status payload.
     /// </summary>
-    public JiraStatusDto? Status { get; set; }
+    public JiraStatusDto? Status { get; init; }
 }
 
 /// <summary>
@@ -30,7 +30,7 @@ public sealed class JiraStatusDto
     /// <summary>
     /// Status display name.
     /// </summary>
-    public string? Name { get; set; }
+    public string? Name { get; init; }
 }
 
 /// <summary>
@@ -41,7 +41,7 @@ public sealed class JiraSearchResponseDto
     /// <summary>
     /// Search result issues.
     /// </summary>
-    public IReadOnlyList<JiraSearchIssueDto> Issues { get; set; } = [];
+    public IReadOnlyList<JiraSearchIssueDto> Issues { get; init; } = [];
 }
 
 /// <summary>
@@ -52,5 +52,5 @@ public sealed class JiraSearchIssueDto
     /// <summary>
     /// Issue fields payload.
     /// </summary>
-    public JiraIssueFieldsDto? Fields { get; set; }
+    public JiraIssueFieldsDto? Fields { get; init; }
 }

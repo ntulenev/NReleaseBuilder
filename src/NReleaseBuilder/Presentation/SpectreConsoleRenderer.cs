@@ -235,9 +235,9 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
             var row = rows[i];
             _ = table.AddRow(
                 new Markup($"[grey]{i + 1}[/]"),
-                new Markup(Markup.Escape(row.Component)),
-                new Markup(Markup.Escape(row.Repository)),
-                new Markup(Markup.Escape(row.CurrentVersion)),
+                new Markup(Markup.Escape(row.Component.Value)),
+                new Markup(Markup.Escape(row.Repository.Value)),
+                new Markup(Markup.Escape(row.CurrentVersion.Value)),
                 new Markup(FormatStatus(row.Status)),
                 BuildNewerVersionsCell(row));
         }
@@ -303,9 +303,9 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
                     CultureInfo.InvariantCulture,
                     "{0}. {1} | {2} | current {3}",
                     i + 1,
-                    row.Component,
-                    row.Repository,
-                    row.CurrentVersion));
+                    row.Component.Value,
+                    row.Repository.Value,
+                    row.CurrentVersion.Value));
 
             if (row.NewerVersions.Count == 0)
             {
@@ -315,10 +315,10 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
 
             foreach (var version in row.NewerVersions)
             {
-                var jiraTask = string.IsNullOrWhiteSpace(version.JiraTask) ? "N/A" : version.JiraTask;
-                var jiraStatus = string.IsNullOrWhiteSpace(version.JiraStatus) ? "N/A" : version.JiraStatus;
+                var jiraTask = version.JiraTask.Value;
+                var jiraStatus = version.JiraStatus.Value;
                 _ = builder.AppendLine(
-                    "   - " + version.Version + " | " + jiraTask + " | " + jiraStatus);
+                    "   - " + version.Version.Value + " | " + jiraTask + " | " + jiraStatus);
             }
         }
 
@@ -355,7 +355,7 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
     {
         if (row.NewerVersions.Count == 0)
         {
-            return new Markup(Markup.Escape(row.DetailsMessage));
+            return new Markup(Markup.Escape(row.DetailsMessage.Value));
         }
 
         var subTable = new Table()
@@ -369,9 +369,9 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
 
         foreach (var item in row.NewerVersions)
         {
-            var jiraTask = string.IsNullOrWhiteSpace(item.JiraTask) ? "N/A" : item.JiraTask;
-            var jiraStatus = string.IsNullOrWhiteSpace(item.JiraStatus) ? "N/A" : item.JiraStatus;
-            _ = subTable.AddRow(Markup.Escape(item.Version), Markup.Escape(jiraTask), Markup.Escape(jiraStatus));
+            var jiraTask = item.JiraTask.Value;
+            var jiraStatus = item.JiraStatus.Value;
+            _ = subTable.AddRow(Markup.Escape(item.Version.Value), Markup.Escape(jiraTask), Markup.Escape(jiraStatus));
         }
 
         return subTable;

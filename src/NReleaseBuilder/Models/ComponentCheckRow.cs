@@ -12,9 +12,9 @@ namespace NReleaseBuilder.Models;
 /// <param name="NewerVersions">Detected newer versions with Jira details.</param>
 public readonly record struct ComponentCheckRow(
     int Index,
-    string Component,
-    string Repository,
-    string CurrentVersion,
+    ComponentName Component,
+    RepositoryName Repository,
+    VersionLabel CurrentVersion,
     CheckStatus Status,
-    string DetailsMessage,
+    RowDetails DetailsMessage,
     IReadOnlyList<VersionJiraRow> NewerVersions);

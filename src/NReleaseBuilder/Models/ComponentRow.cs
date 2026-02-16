@@ -6,4 +6,7 @@ namespace NReleaseBuilder.Models;
 /// <param name="Component">Component name.</param>
 /// <param name="Repository">Repository name.</param>
 /// <param name="Version">Current version from image tag.</param>
-public readonly record struct ComponentRow(string Component, string Repository, string Version);
+public readonly record struct ComponentRow(
+    ComponentName Component,
+    RepositoryName Repository,
+    VersionLabel Version);

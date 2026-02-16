@@ -58,12 +58,15 @@ public sealed class CsvComponentReader : ICsvComponentReader
                 continue;
             }
 
-            _ = rows.Add(new ComponentRow(component, repository, version));
+            _ = rows.Add(new ComponentRow(
+                new ComponentName(component),
+                new RepositoryName(repository),
+                new VersionLabel(version)));
         }
 
         return
         [
-            .. rows.OrderBy(x => x.Component, StringComparer.OrdinalIgnoreCase)
+            .. rows.OrderBy(x => x.Component.Value, StringComparer.OrdinalIgnoreCase)
         ];
     }
 

@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Transport;
 
 /// <summary>
 /// Bitbucket commit DTO.
@@ -8,5 +8,5 @@ public sealed class CommitDto
     /// <summary>
     /// Commit message.
     /// </summary>
-    public string? Message { get; set; }
+    public string? Message { get; init; }
 }

@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 
+using NReleaseBuilder.Models;
+
 using NuGet.Versioning;
 
 namespace NReleaseBuilder.Services;
@@ -9,6 +11,17 @@ namespace NReleaseBuilder.Services;
 /// </summary>
 public static partial class VersionParser
 {
+    /// <summary>
+    /// Tries to parse a <see cref="NuGetVersion"/> from a domain version label.
+    /// </summary>
+    /// <param name="value">Domain version label.</param>
+    /// <param name="version">Parsed version when successful.</param>
+    /// <returns><see langword="true"/> when parsing succeeds; otherwise <see langword="false"/>.</returns>
+    public static bool TryParse(VersionLabel value, out NuGetVersion version)
+    {
+        return TryParse(value.Value, out version);
+    }
+
     /// <summary>
     /// Tries to parse a <see cref="NuGetVersion"/> from a tag value.
     /// </summary>

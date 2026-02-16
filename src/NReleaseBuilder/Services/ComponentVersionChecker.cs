@@ -22,7 +22,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
         {
             var row = componentRows[i];
 
-            var repositoryName = new RepositoryName(row.Repository);
+            var repositoryName = row.Repository;
 
             if (!tagLookups.TryGetValue(repositoryName, out var lookup))
             {
@@ -32,7 +32,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     row.Repository,
                     row.Version,
                     CheckStatus.BitbucketError,
-                    "Repository lookup result is missing.",
+                    new RowDetails("Repository lookup result is missing."),
                     []));
                 continue;
             }
@@ -45,7 +45,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     row.Repository,
                     row.Version,
                     CheckStatus.RepositoryNotFound,
-                    "Repository was not found in Bitbucket workspace.",
+                    new RowDetails("Repository was not found in Bitbucket workspace."),
                     []));
                 continue;
             }
@@ -58,7 +58,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     row.Repository,
                     row.Version,
                     CheckStatus.BitbucketError,
-                    lookup.Error,
+                    new RowDetails(lookup.Error),
                     []));
                 continue;
             }
@@ -71,7 +71,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     row.Repository,
                     row.Version,
                     CheckStatus.InvalidCurrentVersion,
-                    "Current version is not a valid tag format.",
+                    new RowDetails("Current version is not a valid tag format."),
                     []));
                 continue;
             }
@@ -80,7 +80,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 .Select(tag => (Tag: tag, IsValid: VersionParser.TryParse(tag.Name, out var parsed), Parsed: parsed))
                 .Where(x => x.IsValid && x.Parsed > currentVersion)
                 .OrderBy(x => x.Parsed)
-                .ThenBy(x => x.Tag.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.Tag.Name.Value, StringComparer.OrdinalIgnoreCase)
                 .Select(x => new VersionJiraRow(x.Tag.Name, x.Tag.JiraTask, x.Tag.JiraStatus))
                 .Distinct()
                 .ToArray();
@@ -93,7 +93,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     row.Repository,
                     row.Version,
                     CheckStatus.UpToDate,
-                    "-",
+                    new RowDetails("-"),
                     []));
                 continue;
             }
@@ -104,7 +104,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 row.Repository,
                 row.Version,
                 CheckStatus.Outdated,
-                string.Empty,
+                new RowDetails("-"),
                 newerVersions));
         }
 

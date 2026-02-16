@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
+using NReleaseBuilder.Transport;
 
 using Microsoft.Extensions.Options;
 
@@ -106,7 +107,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         BitbucketProgressCallbacks? progress,
         CancellationToken cancellationToken)
     {
-        var tags = new List<(string Name, string? CommitHash)>();
+        var tags = new List<RepositoryTagReference>();
 
         Uri? next = new(
             $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository.Value)}/refs/tags?pagelen={options.PageLen}",
@@ -135,24 +136,9 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                 return RepositoryTagLookup.ApiError(details);
             }
 
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            var page = await JsonSerializer.DeserializeAsync<TagPageDto>(
-                stream,
-                _jsonSerializerOptions,
-                cancellationToken).ConfigureAwait(false);
-
-            if (page?.Values is not null)
-            {
-                foreach (var tag in page.Values)
-                {
-                    if (!string.IsNullOrWhiteSpace(tag.Name))
-                    {
-                        tags.Add((tag.Name.Trim(), tag.Target?.Hash?.Trim()));
-                    }
-                }
-            }
-
-            next = CreateUriOrNull(page?.Next);
+            var page = await ReadTagPageAsync(response, cancellationToken).ConfigureAwait(false);
+            tags.AddRange(page.Values);
+            next = page.Next;
         }
 
         var distinctTags = tags
@@ -170,10 +156,11 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         var jiraCacheByCommit = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var enrichedTags = new List<RepositoryTagInfo>(tagsToInspect.Length);
 
-        foreach (var (name, commitHash) in tagsToInspect)
+        foreach (var tag in tagsToInspect)
         {
             var jiraTask = "N/A";
             var jiraStatus = "N/A";
+            var commitHash = tag.CommitHash;
 
             if (!string.IsNullOrWhiteSpace(commitHash))
             {
@@ -199,7 +186,10 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                 jiraSemaphore,
                 cancellationToken).ConfigureAwait(false);
 
-            enrichedTags.Add(new RepositoryTagInfo(name, jiraTask, jiraStatus));
+            enrichedTags.Add(new RepositoryTagInfo(
+                new VersionLabel(tag.Name),
+                new JiraTaskReference(jiraTask),
+                new JiraStatusReference(jiraStatus)));
             progress?.CommitProcessed?.Invoke(repository.Value);
         }
 
@@ -228,12 +218,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             return null;
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var commit = await JsonSerializer.DeserializeAsync<CommitDto>(
-            stream,
-            _jsonSerializerOptions,
-            cancellationToken).ConfigureAwait(false);
-
+        var commit = await ReadCommitInfoAsync(response, cancellationToken).ConfigureAwait(false);
         return commit?.Message;
     }
 
@@ -352,15 +337,11 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             return $"HTTP {(int)response.StatusCode}";
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var issue = await JsonSerializer.DeserializeAsync<JiraIssueStatusResponseDto>(
-            stream,
-            _jsonSerializerOptions,
-            cancellationToken).ConfigureAwait(false);
+        var issue = await ReadJiraIssueInfoAsync(response, cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrWhiteSpace(issue?.Fields?.Status?.Name))
+        if (issue?.StatusName is { } statusName)
         {
-            return issue.Fields.Status.Name.Trim();
+            return statusName.Value;
         }
 
         return "N/A";
@@ -422,22 +403,70 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             return $"HTTP {(int)response.StatusCode}";
         }
 
+        var searchResult = await ReadJiraSearchResultAsync(response, cancellationToken).ConfigureAwait(false);
+
+        var status = searchResult is not null && searchResult.Issues.Count > 0
+            ? searchResult.Issues[0].StatusName
+            : null;
+
+        if (status is { } jiraStatus)
+        {
+            return jiraStatus.Value;
+        }
+
+        return "Not found";
+    }
+
+    private static async Task<RepositoryTagPage> ReadTagPageAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var searchResult = await JsonSerializer.DeserializeAsync<JiraSearchResponseDto>(
+        var pageDto = await JsonSerializer.DeserializeAsync<TagPageDto>(
             stream,
             _jsonSerializerOptions,
             cancellationToken).ConfigureAwait(false);
 
-        var status = searchResult is not null && searchResult.Issues.Count > 0
-            ? searchResult.Issues[0].Fields?.Status?.Name
-            : null;
+        return pageDto is null ? RepositoryTagPage.Empty : pageDto.ToDomain();
+    }
 
-        if (!string.IsNullOrWhiteSpace(status))
-        {
-            return status.Trim();
-        }
+    private static async Task<CommitInfo?> ReadCommitInfoAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var commitDto = await JsonSerializer.DeserializeAsync<CommitDto>(
+            stream,
+            _jsonSerializerOptions,
+            cancellationToken).ConfigureAwait(false);
 
-        return "Not found";
+        return commitDto?.ToDomain();
+    }
+
+    private static async Task<JiraIssueInfo?> ReadJiraIssueInfoAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var issueDto = await JsonSerializer.DeserializeAsync<JiraIssueStatusResponseDto>(
+            stream,
+            _jsonSerializerOptions,
+            cancellationToken).ConfigureAwait(false);
+
+        return issueDto?.ToDomain();
+    }
+
+    private static async Task<JiraSearchResult?> ReadJiraSearchResultAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var searchDto = await JsonSerializer.DeserializeAsync<JiraSearchResponseDto>(
+            stream,
+            _jsonSerializerOptions,
+            cancellationToken).ConfigureAwait(false);
+
+        return searchDto?.ToDomain();
     }
 
     private static bool IsTransientJiraStatus(string jiraStatus)
@@ -518,26 +547,6 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
     {
         var max = TimeSpan.FromSeconds(30);
         return value > max ? max : value;
-    }
-
-    private static Uri? CreateUriOrNull(string? next)
-    {
-        if (string.IsNullOrWhiteSpace(next))
-        {
-            return null;
-        }
-
-        if (Uri.TryCreate(next, UriKind.Absolute, out var absolute))
-        {
-            return absolute;
-        }
-
-        if (Uri.TryCreate(next, UriKind.Relative, out var relative))
-        {
-            return relative;
-        }
-
-        return null;
     }
 
     private static string TrimText(string value, int maxLength)
