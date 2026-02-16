@@ -80,9 +80,9 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
             errors.Add("Jira.Email is required.");
         }
 
-        if (jira.AllowedTaskStatuses is null || jira.AllowedTaskStatuses.Count == 0)
+        if (jira.AllowedTaskStatuses is null)
         {
-            errors.Add("Jira.AllowedTaskStatuses must contain at least one status.");
+            errors.Add("Jira.AllowedTaskStatuses must not be null.");
             return;
         }
 

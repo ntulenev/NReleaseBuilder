@@ -436,7 +436,7 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
     {
         var allowed = new HashSet<JiraStatusName>(allowedStatuses);
 
-        return allowed.Count == 0 ? [] : [.. rows.Where(row => row.MatchesStatusFilter(allowed))];
+        return allowed.Count == 0 ? [.. rows] : [.. rows.Where(row => row.MatchesStatusFilter(allowed))];
     }
 
     private readonly IJiraStatusStatisticsBuilder _jiraStatusStatisticsBuilder;

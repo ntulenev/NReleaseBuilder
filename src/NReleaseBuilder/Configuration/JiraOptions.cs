@@ -28,7 +28,6 @@ public sealed class JiraOptions
     /// <summary>
     /// Allowed Jira statuses for all tasks attached to newer versions.
     /// </summary>
-    [MinLength(1)]
     public IReadOnlyList<string> AllowedTaskStatuses { get; init; } = [];
 
     /// <summary>
