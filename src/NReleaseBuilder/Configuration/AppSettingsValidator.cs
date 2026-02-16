@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Options;
 
+using NReleaseBuilder.Models;
+
 namespace NReleaseBuilder.Configuration;
 
 /// <summary>
@@ -48,6 +50,30 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         if (!bitbucket.BaseUrl.IsAbsoluteUri)
         {
             errors.Add($"Bitbucket.BaseUrl is not a valid absolute URL: {bitbucket.BaseUrl}");
+        }
+
+        if (bitbucket.ProjectNames.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add("Bitbucket.ProjectNames must not contain empty values.");
+        }
+
+        foreach (var (sourceRepositoryName, targetRepositoryName) in bitbucket.RepositoryNameOverrides)
+        {
+            if (!RepositoryName.TryCreate(sourceRepositoryName, out _))
+            {
+                errors.Add($"Bitbucket.RepositoryNameOverrides contains invalid source repository key: '{sourceRepositoryName}'.");
+            }
+
+            if (!RepositoryName.TryCreate(targetRepositoryName, out _))
+            {
+                errors.Add($"Bitbucket.RepositoryNameOverrides contains invalid target repository value for '{sourceRepositoryName}'.");
+            }
+        }
+
+        var projectNames = bitbucket.ResolveProjectNames();
+        if (projectNames.Length == 0)
+        {
+            errors.Add("Bitbucket.ProjectNames must contain at least one value (ProjectName alias is accepted).");
         }
     }
 

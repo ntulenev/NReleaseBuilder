@@ -107,46 +107,43 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         BitbucketProgressCallbacks? progress,
         CancellationToken cancellationToken)
     {
-        var tags = new List<RepositoryTagReference>();
-
-        Uri? next = new(
-            $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository.Value)}/refs/tags?pagelen={options.PageLen}",
-            UriKind.Relative);
-
-        while (next is not null)
-        {
-            using var response = await GetWithRetryAsync(
+        var repositoryForBitbucketCalls = options.ResolveRepositoryName(repository);
+        var tagLoadResult = await LoadRepositoryTagReferencesAsync(
                 httpClient,
-                next,
-                options.RetryCount,
-                cancellationToken).ConfigureAwait(false);
+                options,
+                repositoryForBitbucketCalls,
+                cancellationToken)
+            .ConfigureAwait(false);
 
-            if (response.StatusCode == HttpStatusCode.NotFound)
+        if (tagLoadResult.IsRepositoryMissing
+            && options.UseTruncatedRepositoryNameFallback
+            && TryBuildTruncatedRepositoryName(repositoryForBitbucketCalls) is { } truncatedRepository)
+        {
+            var fallbackLoadResult = await LoadRepositoryTagReferencesAsync(
+                    httpClient,
+                    options,
+                    truncatedRepository,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!fallbackLoadResult.IsRepositoryMissing)
             {
-                return RepositoryTagLookup.RepoNotFound();
+                repositoryForBitbucketCalls = truncatedRepository;
+                tagLoadResult = fallbackLoadResult;
             }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                var details = string.IsNullOrWhiteSpace(body)
-                    ? $"{(int)response.StatusCode} {response.ReasonPhrase}"
-                    : $"{(int)response.StatusCode} {response.ReasonPhrase}: {TrimText(body, 180)}";
-
-                return RepositoryTagLookup.ApiError(details);
-            }
-
-            var page = await ReadTagPageAsync(response, cancellationToken).ConfigureAwait(false);
-            tags.AddRange(page.Values);
-            next = page.Next;
         }
 
-        var distinctTags = tags
-            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(x => x.First())
-            .ToArray();
+        if (tagLoadResult.IsRepositoryMissing)
+        {
+            return RepositoryTagLookup.RepoNotFound();
+        }
 
-        var tagsToInspect = distinctTags
+        if (!string.IsNullOrWhiteSpace(tagLoadResult.Error))
+        {
+            return RepositoryTagLookup.ApiError(tagLoadResult.Error);
+        }
+
+        var tagsToInspect = tagLoadResult.Tags
             .Where(tag => minCurrentVersion is null
                 || (VersionParser.TryParse(tag.Name, out var parsedVersion) && parsedVersion > minCurrentVersion))
             .ToArray();
@@ -169,11 +166,11 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                     var message = await TryGetCommitMessageAsync(
                         httpClient,
                         options,
-                        repository,
+                        repositoryForBitbucketCalls,
                         commitHash,
                         cancellationToken).ConfigureAwait(false);
 
-                    jiraTask = ExtractJiraTask(message, options.ProjectName);
+                    jiraTask = ExtractJiraTask(message, options.ResolveProjectNames());
                     jiraCacheByCommit[commitHash] = jiraTask;
                 }
             }
@@ -194,6 +191,67 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         }
 
         return RepositoryTagLookup.Success(enrichedTags);
+    }
+
+    private static async Task<RepositoryTagReferenceLoadResult> LoadRepositoryTagReferencesAsync(
+        HttpClient httpClient,
+        BitbucketOptions options,
+        RepositoryName repository,
+        CancellationToken cancellationToken)
+    {
+        var tags = new List<RepositoryTagReference>();
+
+        Uri? next = new(
+            $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository.Value)}/refs/tags?pagelen={options.PageLen}",
+            UriKind.Relative);
+
+        while (next is not null)
+        {
+            using var response = await GetWithRetryAsync(
+                httpClient,
+                next,
+                options.RetryCount,
+                cancellationToken).ConfigureAwait(false);
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return RepositoryTagReferenceLoadResult.RepoNotFound();
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                var details = string.IsNullOrWhiteSpace(body)
+                    ? $"{(int)response.StatusCode} {response.ReasonPhrase}"
+                    : $"{(int)response.StatusCode} {response.ReasonPhrase}: {TrimText(body, 180)}";
+
+                return RepositoryTagReferenceLoadResult.ApiError(details);
+            }
+
+            var page = await ReadTagPageAsync(response, cancellationToken).ConfigureAwait(false);
+            tags.AddRange(page.Values);
+            next = page.Next;
+        }
+
+        var distinctTags = tags
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .ToArray();
+
+        return RepositoryTagReferenceLoadResult.Success(distinctTags);
+    }
+
+    private static RepositoryName? TryBuildTruncatedRepositoryName(RepositoryName repository)
+    {
+        var value = repository.Value;
+        var lastDotIndex = value.LastIndexOf('.');
+
+        if (lastDotIndex <= 0 || lastDotIndex == value.Length - 1)
+        {
+            return null;
+        }
+
+        return new RepositoryName(value[..lastDotIndex]);
     }
 
     private static async Task<string?> TryGetCommitMessageAsync(
@@ -222,14 +280,17 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         return commit?.Message;
     }
 
-    private static string ExtractJiraTask(string? commitMessage, string projectName)
+    private static string ExtractJiraTask(string? commitMessage, string[] projectNames)
     {
-        if (string.IsNullOrWhiteSpace(commitMessage) || string.IsNullOrWhiteSpace(projectName))
+        if (string.IsNullOrWhiteSpace(commitMessage) || projectNames.Length == 0)
         {
             return "N/A";
         }
 
-        var pattern = $@"\b{Regex.Escape(projectName)}-\d+\b";
+        var projectNamePattern = string.Join(
+            "|",
+            projectNames.Select(static projectName => Regex.Escape(projectName)));
+        var pattern = $@"\b(?<project>{projectNamePattern})-\d+\b";
         var matches = Regex.Matches(commitMessage, pattern, RegexOptions.IgnoreCase);
 
         if (matches.Count == 0)
@@ -237,10 +298,15 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             return "N/A";
         }
 
+        var selectedProjectName = matches[0].Groups["project"].Value;
+
         var jiraTasks = matches
-            .Select(x => x.Value.ToUpperInvariant())
+            .Where(match => string.Equals(
+                match.Groups["project"].Value,
+                selectedProjectName,
+                StringComparison.OrdinalIgnoreCase))
+            .Select(match => match.Value.ToUpperInvariant())
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         return string.Join(", ", jiraTasks);
@@ -558,6 +624,26 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         }
 
         return oneLine[..maxLength] + "...";
+    }
+
+    private readonly record struct RepositoryTagReferenceLoadResult(
+        bool IsRepositoryMissing,
+        string? Error,
+        RepositoryTagReference[] Tags)
+    {
+        public static RepositoryTagReferenceLoadResult RepoNotFound() => new(true, null, []);
+
+        public static RepositoryTagReferenceLoadResult ApiError(string error)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(error);
+            return new RepositoryTagReferenceLoadResult(false, error, []);
+        }
+
+        public static RepositoryTagReferenceLoadResult Success(RepositoryTagReference[] tags)
+        {
+            ArgumentNullException.ThrowIfNull(tags);
+            return new RepositoryTagReferenceLoadResult(false, null, tags);
+        }
     }
 
     private readonly IHttpClientFactory _httpClientFactory;

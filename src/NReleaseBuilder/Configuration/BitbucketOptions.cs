@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
+using NReleaseBuilder.Models;
+
 namespace NReleaseBuilder.Configuration;
 
 /// <summary>
@@ -21,11 +23,14 @@ public sealed class BitbucketOptions
     public required string Workspace { get; init; }
 
     /// <summary>
-    /// Jira project key used to extract tasks from commit messages.
+    /// Jira project keys used to extract tasks from commit messages.
     /// </summary>
-    [Required]
-    [MinLength(1)]
-    public required string ProjectName { get; init; }
+    public IReadOnlyList<string> ProjectNames { get; init; } = [];
+
+    /// <summary>
+    /// Backward-compatible alias for <see cref="ProjectNames"/>.
+    /// </summary>
+    public string ProjectName { get; init; } = string.Empty;
 
     /// <summary>
     /// Authentication email for Bitbucket API.
@@ -58,4 +63,60 @@ public sealed class BitbucketOptions
     /// </summary>
     [Range(1, 20)]
     public int MaxParallelRequests { get; init; } = 6;
+
+    /// <summary>
+    /// Enables fallback lookup that retries missing repositories without the last dot-separated segment.
+    /// </summary>
+    public bool UseTruncatedRepositoryNameFallback { get; init; }
+
+    /// <summary>
+    /// Optional mapping from CSV repository names to real Bitbucket repository names.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> RepositoryNameOverrides { get; init; } =
+        new Dictionary<string, string>();
+
+    /// <summary>
+    /// Resolves project keys from current and backward-compatible fields.
+    /// </summary>
+    /// <returns>Distinct project keys.</returns>
+    public string[] ResolveProjectNames()
+    {
+        if (ProjectNames.Count > 0)
+        {
+            return
+            [
+                .. ProjectNames
+                    .Where(static x => !string.IsNullOrWhiteSpace(x))
+                    .Select(static x => x.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+            ];
+        }
+
+        return string.IsNullOrWhiteSpace(ProjectName)
+            ? []
+            : [ProjectName.Trim()];
+    }
+
+    /// <summary>
+    /// Resolves repository name via optional override mapping.
+    /// </summary>
+    /// <param name="repository">Repository from CSV.</param>
+    /// <returns>Mapped repository when configured; otherwise original repository.</returns>
+    public RepositoryName ResolveRepositoryName(RepositoryName repository)
+    {
+        if (RepositoryNameOverrides.Count == 0)
+        {
+            return repository;
+        }
+
+        foreach (var (sourceRepositoryName, targetRepositoryName) in RepositoryNameOverrides)
+        {
+            if (string.Equals(sourceRepositoryName, repository.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                return new RepositoryName(targetRepositoryName);
+            }
+        }
+
+        return repository;
+    }
 }
