@@ -8,9 +8,8 @@ namespace NReleaseBuilder.Abstractions;
 public interface ICsvComponentReader
 {
     /// <summary>
-    /// Reads rows from a CSV file.
+    /// Reads rows from a configured CSV file.
     /// </summary>
-    /// <param name="csvFilePath">CSV file path.</param>
     /// <returns>Distinct component rows.</returns>
-    IReadOnlyList<ComponentRow> Read(string csvFilePath);
+    IReadOnlyList<ComponentRow> Read();
 }

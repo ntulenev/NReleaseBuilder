@@ -5,6 +5,8 @@ using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
 
+using Microsoft.Extensions.Options;
+
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -15,17 +17,31 @@ namespace NReleaseBuilder.Presentation;
 /// </summary>
 public sealed class SpectreConsoleRenderer : IConsoleRenderer
 {
-    /// <inheritdoc />
-    public void RenderHeader(AppSettings settings)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SpectreConsoleRenderer"/> class.
+    /// </summary>
+    /// <param name="options">Application settings options.</param>
+    /// <param name="jiraStatusStatisticsBuilder">Jira status statistics builder.</param>
+    public SpectreConsoleRenderer(
+        IOptions<AppSettings> options,
+        IJiraStatusStatisticsBuilder jiraStatusStatisticsBuilder)
     {
-        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(jiraStatusStatisticsBuilder);
 
+        _settings = options.Value;
+        _jiraStatusStatisticsBuilder = jiraStatusStatisticsBuilder;
+    }
+
+    /// <inheritdoc />
+    public void RenderHeader()
+    {
         AnsiConsole.Write(new Rule("[bold deepskyblue1]Components Version Check[/]").RuleStyle("grey").LeftJustified());
-        AnsiConsole.MarkupLine($"[grey]Source:[/] [silver]{Markup.Escape(settings.CsvFilePath)}[/]");
-        AnsiConsole.MarkupLine($"[grey]Workspace:[/] [silver]{Markup.Escape(settings.Bitbucket.Workspace)}[/]");
-        if (settings.Jira.AllowedTaskStatuses.Count > 0)
+        AnsiConsole.MarkupLine($"[grey]Source:[/] [silver]{Markup.Escape(_settings.CsvFilePath)}[/]");
+        AnsiConsole.MarkupLine($"[grey]Workspace:[/] [silver]{Markup.Escape(_settings.Bitbucket.Workspace)}[/]");
+        if (_settings.Jira.AllowedTaskStatuses.Count > 0)
         {
-            AnsiConsole.MarkupLine($"[grey]Jira Status Filter:[/] [silver]{Markup.Escape(string.Join(", ", settings.Jira.AllowedTaskStatuses))}[/]");
+            AnsiConsole.MarkupLine($"[grey]Jira Status Filter:[/] [silver]{Markup.Escape(string.Join(", ", _settings.Jira.AllowedTaskStatuses))}[/]");
         }
         AnsiConsole.WriteLine();
     }
@@ -230,6 +246,27 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
     }
 
     /// <inheritdoc />
+    public void RenderResults(IReadOnlyList<ComponentCheckRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+
+        var allowedStatuses = _settings.Jira.BuildAllowedStatuses();
+        var filteredRows = FilterRowsByAllowedJiraStatuses(rows, allowedStatuses);
+
+        if (filteredRows.Length == 0)
+        {
+            PrintNoComponentsMatchedStatusFilter(allowedStatuses);
+            var statusStatistics = _jiraStatusStatisticsBuilder.Build(rows);
+            PrintStatusFilterDiagnostics(statusStatistics, allowedStatuses);
+            return;
+        }
+
+        RenderTable(filteredRows);
+        RenderSummary(filteredRows);
+        RenderSlackCopyText(filteredRows, allowedStatuses);
+    }
+
+    /// <inheritdoc />
     public void RenderTable(IReadOnlyList<ComponentCheckRow> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);
@@ -392,4 +429,16 @@ public sealed class SpectreConsoleRenderer : IConsoleRenderer
 
         return subTable;
     }
+
+    private static ComponentCheckRow[] FilterRowsByAllowedJiraStatuses(
+        IReadOnlyList<ComponentCheckRow> rows,
+        IReadOnlyList<JiraStatusName> allowedStatuses)
+    {
+        var allowed = new HashSet<JiraStatusName>(allowedStatuses);
+
+        return allowed.Count == 0 ? [] : [.. rows.Where(row => row.MatchesStatusFilter(allowed))];
+    }
+
+    private readonly IJiraStatusStatisticsBuilder _jiraStatusStatisticsBuilder;
+    private readonly AppSettings _settings;
 }

@@ -1,11 +1,9 @@
 using System.Text.Json;
 
 using NReleaseBuilder.Abstractions;
-using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
 using NReleaseBuilder.Services;
 
-using Microsoft.Extensions.Options;
 using Microsoft.VisualBasic.FileIO;
 
 using NuGet.Versioning;
@@ -23,30 +21,22 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     /// <param name="csvReader">CSV reader service.</param>
     /// <param name="bitbucketTagClient">Bitbucket tag client.</param>
     /// <param name="versionChecker">Version comparison service.</param>
-    /// <param name="jiraStatusStatisticsBuilder">Jira status statistics builder.</param>
     /// <param name="renderer">Console renderer.</param>
-    /// <param name="options">Application settings options.</param>
     public VersionCheckApplication(
         ICsvComponentReader csvReader,
         IBitbucketTagClient bitbucketTagClient,
         IComponentVersionChecker versionChecker,
-        IJiraStatusStatisticsBuilder jiraStatusStatisticsBuilder,
-        IConsoleRenderer renderer,
-        IOptions<AppSettings> options)
+        IConsoleRenderer renderer)
     {
         ArgumentNullException.ThrowIfNull(csvReader);
         ArgumentNullException.ThrowIfNull(bitbucketTagClient);
         ArgumentNullException.ThrowIfNull(versionChecker);
-        ArgumentNullException.ThrowIfNull(jiraStatusStatisticsBuilder);
         ArgumentNullException.ThrowIfNull(renderer);
-        ArgumentNullException.ThrowIfNull(options);
 
         _csvReader = csvReader;
         _bitbucketTagClient = bitbucketTagClient;
         _versionChecker = versionChecker;
-        _jiraStatusStatisticsBuilder = jiraStatusStatisticsBuilder;
         _renderer = renderer;
-        _settings = options.Value;
     }
 
     /// <inheritdoc />
@@ -59,7 +49,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
             return 1;
         }
 
-        _renderer.RenderHeader(_settings);
+        _renderer.RenderHeader();
 
         if (TryHandleNoComponentRows(componentRows))
         {
@@ -78,17 +68,15 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
         }
 
         var checkRows = _versionChecker.BuildRows(componentRows, tagLookups);
-        var allowedStatuses = _settings.Jira.BuildAllowedStatuses();
-        var filteredRows = FilterRowsByAllowedJiraStatuses(checkRows, allowedStatuses);
-
-        return RenderResults(checkRows, filteredRows, allowedStatuses);
+        _renderer.RenderResults(checkRows);
+        return 0;
     }
 
     private IReadOnlyList<ComponentRow>? TryReadComponentRows()
     {
         try
         {
-            return _csvReader.Read(_settings.CsvFilePath);
+            return _csvReader.Read();
         }
         catch (MalformedLineException ex)
         {
@@ -228,40 +216,11 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
         }
     }
 
-    private int RenderResults(
-        IReadOnlyList<ComponentCheckRow> checkRows,
-        ComponentCheckRow[] filteredRows,
-        IReadOnlyList<JiraStatusName> allowedStatuses)
-    {
-        if (filteredRows.Length == 0)
-        {
-            _renderer.PrintNoComponentsMatchedStatusFilter(allowedStatuses);
-            var statusStatistics = _jiraStatusStatisticsBuilder.Build(checkRows);
-            _renderer.PrintStatusFilterDiagnostics(statusStatistics, allowedStatuses);
-            return 0;
-        }
-
-        _renderer.RenderTable(filteredRows);
-        _renderer.RenderSummary(filteredRows);
-        _renderer.RenderSlackCopyText(filteredRows, allowedStatuses);
-
-        return 0;
-    }
-
     private void PrintCsvParsingError(Exception exception)
         => _renderer.PrintError(new ErrorMessage($"Failed to parse CSV: {exception.Message}"));
 
     private void PrintBitbucketLoadingError(Exception exception)
         => _renderer.PrintError(new ErrorMessage($"Failed to load tags from Bitbucket: {exception.Message}"));
-
-    private static ComponentCheckRow[] FilterRowsByAllowedJiraStatuses(
-        IReadOnlyList<ComponentCheckRow> rows,
-        IReadOnlyList<JiraStatusName> allowedStatuses)
-    {
-        var allowed = new HashSet<JiraStatusName>(allowedStatuses);
-
-        return allowed.Count == 0 ? [] : [.. rows.Where(row => row.MatchesStatusFilter(allowed))];
-    }
 
     private readonly record struct RepositoryVersionContext(
         RepositoryName[] Repositories,
@@ -271,7 +230,5 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     private readonly ICsvComponentReader _csvReader;
     private readonly IBitbucketTagClient _bitbucketTagClient;
     private readonly IComponentVersionChecker _versionChecker;
-    private readonly IJiraStatusStatisticsBuilder _jiraStatusStatisticsBuilder;
     private readonly IConsoleRenderer _renderer;
-    private readonly AppSettings _settings;
 }

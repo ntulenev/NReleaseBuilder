@@ -1,7 +1,10 @@
 using Microsoft.VisualBasic.FileIO;
 
 using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
+
+using Microsoft.Extensions.Options;
 
 namespace NReleaseBuilder.Services;
 
@@ -10,14 +13,27 @@ namespace NReleaseBuilder.Services;
 /// </summary>
 public sealed class CsvComponentReader : ICsvComponentReader
 {
-    /// <inheritdoc />
-    public IReadOnlyList<ComponentRow> Read(string csvFilePath)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CsvComponentReader"/> class.
+    /// </summary>
+    /// <param name="options">Application settings options.</param>
+    public CsvComponentReader(IOptions<AppSettings> options)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(csvFilePath);
+        ArgumentNullException.ThrowIfNull(options);
 
+        var settings = options.Value;
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentException.ThrowIfNullOrWhiteSpace(settings.CsvFilePath);
+
+        _csvFilePath = settings.CsvFilePath;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<ComponentRow> Read()
+    {
         var rows = new HashSet<ComponentRow>();
 
-        using var parser = new TextFieldParser(csvFilePath);
+        using var parser = new TextFieldParser(_csvFilePath);
         parser.TextFieldType = FieldType.Delimited;
         parser.SetDelimiters(",");
         parser.HasFieldsEnclosedInQuotes = true;
@@ -98,4 +114,6 @@ public sealed class CsvComponentReader : ICsvComponentReader
 
         return (imageWithoutDigest[(lastSlashIndex + 1)..], string.Empty);
     }
+
+    private readonly string _csvFilePath;
 }

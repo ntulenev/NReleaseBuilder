@@ -1,4 +1,3 @@
-using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
 
 namespace NReleaseBuilder.Abstractions;
@@ -11,8 +10,7 @@ public interface IConsoleRenderer
     /// <summary>
     /// Renders the initial run header.
     /// </summary>
-    /// <param name="settings">Application settings.</param>
-    void RenderHeader(AppSettings settings);
+    void RenderHeader();
 
     /// <summary>
     /// Prints the number of repositories to be checked.
@@ -65,6 +63,12 @@ public interface IConsoleRenderer
     void PrintStatusFilterDiagnostics(
         IReadOnlyDictionary<JiraStatusName, int> statusStatistics,
         IReadOnlyList<JiraStatusName> allowedStatuses);
+
+    /// <summary>
+    /// Renders final filtered results with diagnostics when nothing matches.
+    /// </summary>
+    /// <param name="rows">Rows to render.</param>
+    void RenderResults(IReadOnlyList<ComponentCheckRow> rows);
 
     /// <summary>
     /// Renders component status table.
