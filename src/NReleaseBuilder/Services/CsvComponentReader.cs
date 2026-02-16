@@ -17,73 +17,106 @@ public sealed class CsvComponentReader : ICsvComponentReader
     /// Initializes a new instance of the <see cref="CsvComponentReader"/> class.
     /// </summary>
     /// <param name="options">Application settings options.</param>
-    public CsvComponentReader(IOptions<AppSettings> options)
+    /// <param name="renderer">Console renderer.</param>
+    public CsvComponentReader(
+        IOptions<AppSettings> options,
+        IConsoleRenderer renderer)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(renderer);
 
         var settings = options.Value;
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.CsvFilePath);
 
         _csvFilePath = settings.CsvFilePath;
+        _renderer = renderer;
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<ComponentRow> Read()
+    public IReadOnlyList<ComponentRow>? Read()
     {
-        var rows = new HashSet<ComponentRow>();
-
-        using var parser = new TextFieldParser(_csvFilePath);
-        parser.TextFieldType = FieldType.Delimited;
-        parser.SetDelimiters(",");
-        parser.HasFieldsEnclosedInQuotes = true;
-
-        var headers = parser.ReadFields();
-        if (headers is null)
+        try
         {
-            throw new InvalidOperationException("CSV file is empty.");
-        }
+            var rows = new HashSet<ComponentRow>();
 
-        var containerIndex = FindHeaderIndex(headers, "container");
-        var imageIndex = FindHeaderIndex(headers, "image");
+            using var parser = new TextFieldParser(_csvFilePath);
+            parser.TextFieldType = FieldType.Delimited;
+            parser.SetDelimiters(",");
+            parser.HasFieldsEnclosedInQuotes = true;
 
-        if (containerIndex < 0 || imageIndex < 0)
-        {
-            throw new InvalidOperationException("CSV must contain 'container' and 'image' columns.");
-        }
-
-        while (!parser.EndOfData)
-        {
-            var fields = parser.ReadFields();
-            if (fields is null || fields.Length <= Math.Max(containerIndex, imageIndex))
+            var headers = parser.ReadFields();
+            if (headers is null)
             {
-                continue;
+                throw new InvalidOperationException("CSV file is empty.");
             }
 
-            var component = fields[containerIndex]?.Trim();
-            var image = fields[imageIndex]?.Trim();
+            var containerIndex = FindHeaderIndex(headers, "container");
+            var imageIndex = FindHeaderIndex(headers, "image");
 
-            if (string.IsNullOrWhiteSpace(component) || string.IsNullOrWhiteSpace(image))
+            if (containerIndex < 0 || imageIndex < 0)
             {
-                continue;
+                throw new InvalidOperationException("CSV must contain 'container' and 'image' columns.");
             }
 
-            var (repository, version) = ParseImage(image);
-            if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(version))
+            while (!parser.EndOfData)
             {
-                continue;
+                var fields = parser.ReadFields();
+                if (fields is null || fields.Length <= Math.Max(containerIndex, imageIndex))
+                {
+                    continue;
+                }
+
+                var component = fields[containerIndex]?.Trim();
+                var image = fields[imageIndex]?.Trim();
+
+                if (string.IsNullOrWhiteSpace(component) || string.IsNullOrWhiteSpace(image))
+                {
+                    continue;
+                }
+
+                var (repository, version) = ParseImage(image);
+                if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(version))
+                {
+                    continue;
+                }
+
+                _ = rows.Add(new ComponentRow(
+                    new ComponentName(component),
+                    new RepositoryName(repository),
+                    new VersionLabel(version)));
             }
 
-            _ = rows.Add(new ComponentRow(
-                new ComponentName(component),
-                new RepositoryName(repository),
-                new VersionLabel(version)));
+            return
+            [
+                .. rows.OrderBy(x => x.Component.Value, StringComparer.OrdinalIgnoreCase)
+            ];
         }
-
-        return
-        [
-            .. rows.OrderBy(x => x.Component.Value, StringComparer.OrdinalIgnoreCase)
-        ];
+        catch (MalformedLineException ex)
+        {
+            PrintCsvParsingError(ex);
+            return null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            PrintCsvParsingError(ex);
+            return null;
+        }
+        catch (IOException ex)
+        {
+            PrintCsvParsingError(ex);
+            return null;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            PrintCsvParsingError(ex);
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            PrintCsvParsingError(ex);
+            return null;
+        }
     }
 
     private static int FindHeaderIndex(string[] headers, string headerName)
@@ -115,5 +148,12 @@ public sealed class CsvComponentReader : ICsvComponentReader
         return (imageWithoutDigest[(lastSlashIndex + 1)..], string.Empty);
     }
 
+    private void PrintCsvParsingError(Exception exception)
+    {
+        _renderer.PrintError(
+            new ErrorMessage($"Failed to parse CSV: {exception.Message}"));
+    }
+
     private readonly string _csvFilePath;
+    private readonly IConsoleRenderer _renderer;
 }
