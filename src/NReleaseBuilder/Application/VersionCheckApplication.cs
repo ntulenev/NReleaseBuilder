@@ -38,7 +38,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     /// <inheritdoc />
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
-        var componentRows = TryReadComponentRows();
+        var componentRows = TryReadComponentRows()?.ToList();
 
         if (componentRows is null)
         {
@@ -74,7 +74,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     private IReadOnlyList<ComponentRow>? TryReadComponentRows()
         => _csvReader.Read();
 
-    private bool TryHandleNoComponentRows(IReadOnlyList<ComponentRow> componentRows)
+    private bool TryHandleNoComponentRows(List<ComponentRow> componentRows)
     {
         if (componentRows.Count != 0)
         {

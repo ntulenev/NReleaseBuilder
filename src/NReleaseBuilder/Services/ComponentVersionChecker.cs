@@ -37,12 +37,14 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 continue;
             }
 
+            var resolvedRepositoryName = lookup.ResolvedRepository;
+
             if (lookup.IsRepositoryMissing)
             {
                 result.Add(new ComponentCheckRow(
                     new ComponentCheckIndex(i + 1),
                     row.Component,
-                    row.Repository,
+                    resolvedRepositoryName,
                     row.Version,
                     CheckStatus.RepositoryNotFound,
                     new RowDetails("Repository was not found in Bitbucket workspace."),
@@ -55,7 +57,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 result.Add(new ComponentCheckRow(
                     new ComponentCheckIndex(i + 1),
                     row.Component,
-                    row.Repository,
+                    resolvedRepositoryName,
                     row.Version,
                     CheckStatus.BitbucketError,
                     new RowDetails(lookup.Error),
@@ -68,7 +70,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 result.Add(new ComponentCheckRow(
                     new ComponentCheckIndex(i + 1),
                     row.Component,
-                    row.Repository,
+                    resolvedRepositoryName,
                     row.Version,
                     CheckStatus.InvalidCurrentVersion,
                     new RowDetails("Current version is not a valid tag format."),
@@ -90,7 +92,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 result.Add(new ComponentCheckRow(
                     new ComponentCheckIndex(i + 1),
                     row.Component,
-                    row.Repository,
+                    resolvedRepositoryName,
                     row.Version,
                     CheckStatus.UpToDate,
                     new RowDetails("-"),
@@ -101,7 +103,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             result.Add(new ComponentCheckRow(
                 new ComponentCheckIndex(i + 1),
                 row.Component,
-                row.Repository,
+                resolvedRepositoryName,
                 row.Version,
                 CheckStatus.Outdated,
                 new RowDetails("-"),

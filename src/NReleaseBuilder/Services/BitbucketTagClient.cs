@@ -135,12 +135,12 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
 
         if (tagLoadResult.IsRepositoryMissing)
         {
-            return RepositoryTagLookup.RepoNotFound();
+            return RepositoryTagLookup.RepoNotFound(repositoryForBitbucketCalls);
         }
 
         if (!string.IsNullOrWhiteSpace(tagLoadResult.Error))
         {
-            return RepositoryTagLookup.ApiError(tagLoadResult.Error);
+            return RepositoryTagLookup.ApiError(repositoryForBitbucketCalls, tagLoadResult.Error);
         }
 
         var tagsToInspect = tagLoadResult.Tags
@@ -190,7 +190,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             progress?.CommitProcessed?.Invoke(repository.Value);
         }
 
-        return RepositoryTagLookup.Success(enrichedTags);
+        return RepositoryTagLookup.Success(repositoryForBitbucketCalls, enrichedTags);
     }
 
     private static async Task<RepositoryTagReferenceLoadResult> LoadRepositoryTagReferencesAsync(

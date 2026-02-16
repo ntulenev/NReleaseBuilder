@@ -19,6 +19,7 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         ValidateCsvPath(options.CsvFilePath, errors);
         ValidateBitbucket(options.Bitbucket, errors);
         ValidateJira(options.Jira, errors);
+        ValidatePdf(options.Pdf, errors);
 
         return errors.Count == 0
             ? ValidateOptionsResult.Success
@@ -115,6 +116,43 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         if (jira.AllowedTaskStatuses.Any(string.IsNullOrWhiteSpace))
         {
             errors.Add("Jira.AllowedTaskStatuses must not contain empty values.");
+        }
+    }
+
+    private static void ValidatePdf(PdfOptions? pdf, List<string> errors)
+    {
+        if (pdf is null)
+        {
+            errors.Add("Pdf section is missing in appsettings.json.");
+            return;
+        }
+
+        if (!pdf.Enabled)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(pdf.OutputPath))
+        {
+            errors.Add("Pdf.OutputPath is required when Pdf.Enabled is true.");
+            return;
+        }
+
+        try
+        {
+            _ = pdf.ResolveOutputPath();
+        }
+        catch (ArgumentException)
+        {
+            errors.Add($"Pdf.OutputPath is invalid: '{pdf.OutputPath}'.");
+        }
+        catch (NotSupportedException)
+        {
+            errors.Add($"Pdf.OutputPath is not supported: '{pdf.OutputPath}'.");
+        }
+        catch (PathTooLongException)
+        {
+            errors.Add("Pdf.OutputPath is too long.");
         }
     }
 }

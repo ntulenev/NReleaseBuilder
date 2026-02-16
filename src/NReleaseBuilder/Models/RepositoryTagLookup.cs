@@ -8,12 +8,24 @@ public readonly record struct RepositoryTagLookup
     /// <summary>
     /// Initializes a new instance of the <see cref="RepositoryTagLookup"/> struct.
     /// </summary>
+    /// <param name="resolvedRepository">Repository name used for Bitbucket lookup.</param>
     /// <param name="isRepositoryMissing">Whether repository does not exist.</param>
     /// <param name="error">Error details for failed API calls.</param>
     /// <param name="tags">Resolved tags when lookup succeeds.</param>
-    public RepositoryTagLookup(bool isRepositoryMissing, string? error, IReadOnlyList<RepositoryTagInfo> tags)
+    public RepositoryTagLookup(
+        RepositoryName resolvedRepository,
+        bool isRepositoryMissing,
+        string? error,
+        IReadOnlyList<RepositoryTagInfo> tags)
     {
         ArgumentNullException.ThrowIfNull(tags);
+
+        if (string.IsNullOrWhiteSpace(resolvedRepository.Value))
+        {
+            throw new ArgumentException(
+                "Resolved repository must not be empty.",
+                nameof(resolvedRepository));
+        }
 
         var normalizedError = string.IsNullOrWhiteSpace(error) ? null : error.Trim();
 
@@ -24,10 +36,16 @@ public readonly record struct RepositoryTagLookup
                 nameof(error));
         }
 
+        ResolvedRepository = resolvedRepository;
         IsRepositoryMissing = isRepositoryMissing;
         Error = normalizedError;
         Tags = tags;
     }
+
+    /// <summary>
+    /// Repository name used for Bitbucket lookup.
+    /// </summary>
+    public RepositoryName ResolvedRepository { get; }
 
     /// <summary>
     /// Whether repository does not exist.
@@ -47,30 +65,36 @@ public readonly record struct RepositoryTagLookup
     /// <summary>
     /// Creates lookup result for missing repository.
     /// </summary>
+    /// <param name="resolvedRepository">Repository name used for Bitbucket lookup.</param>
     /// <returns>Repository-not-found lookup result.</returns>
-    public static RepositoryTagLookup RepoNotFound() => new(true, null, []);
+    public static RepositoryTagLookup RepoNotFound(RepositoryName resolvedRepository) =>
+        new(resolvedRepository, true, null, []);
 
     /// <summary>
     /// Creates lookup result for API error.
     /// </summary>
+    /// <param name="resolvedRepository">Repository name used for Bitbucket lookup.</param>
     /// <param name="error">Error details.</param>
     /// <returns>API-error lookup result.</returns>
-    public static RepositoryTagLookup ApiError(string error)
+    public static RepositoryTagLookup ApiError(RepositoryName resolvedRepository, string error)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(error);
 
-        return new RepositoryTagLookup(false, error, []);
+        return new RepositoryTagLookup(resolvedRepository, false, error, []);
     }
 
     /// <summary>
     /// Creates successful lookup result.
     /// </summary>
+    /// <param name="resolvedRepository">Repository name used for Bitbucket lookup.</param>
     /// <param name="tags">Resolved repository tags.</param>
     /// <returns>Successful lookup result.</returns>
-    public static RepositoryTagLookup Success(IReadOnlyList<RepositoryTagInfo> tags)
+    public static RepositoryTagLookup Success(
+        RepositoryName resolvedRepository,
+        IReadOnlyList<RepositoryTagInfo> tags)
     {
         ArgumentNullException.ThrowIfNull(tags);
 
-        return new RepositoryTagLookup(false, null, tags);
+        return new RepositoryTagLookup(resolvedRepository, false, null, tags);
     }
 }

@@ -25,4 +25,10 @@ public sealed class AppSettings
     /// </summary>
     [Required]
     public required JiraOptions Jira { get; init; }
+
+    /// <summary>
+    /// PDF report output options.
+    /// </summary>
+    [Required]
+    public PdfOptions Pdf { get; init; } = new();
 }
