@@ -2,6 +2,37 @@
 
 NReleaseBuilder is a .NET console application that checks deployed component versions from a CSV file against Bitbucket tags, then enriches newer versions with Jira task and status information.
 
+## Project Structure
+
+```text
+NReleaseBuilder/
+|-- Abstractions/
+|-- Application/
+|-- Bitbucket/
+|-- Configuration/
+|-- Csv/
+|-- Jira/
+|-- Models/
+|-- Presentation/
+|   |-- Console/
+|   `-- Pdf/
+|-- Transport/
+|-- Program.cs
+`-- appsettings.json
+```
+
+### Layers and Responsibilities
+
+| Layer | Main folders | Responsibility |
+| --- | --- | --- |
+| Composition root | `Program.cs` | Registers DI services, configures HTTP clients and application startup. |
+| Abstractions | `Abstractions/` | Defines interfaces used between layers (rendering, integrations, application workflow). |
+| Application | `Application/` | Orchestrates the end-to-end version check use case via abstractions. |
+| Domain model | `Models/` | Value objects and domain models used across the app. |
+| Infrastructure / integrations | `Bitbucket/`, `Jira/`, `Csv/`, `Transport/` | External API access, parsing, retry/serialization, and CSV input handling. |
+| Presentation | `Presentation/Console/`, `Presentation/Pdf/`, `Presentation/GeneralFacadeRenderer.cs` | Console and PDF output composition and rendering orchestration. |
+| Configuration | `Configuration/`, `appsettings.json` | Typed settings, validation rules, and runtime options. |
+
 ## What It Does
 
 1. Reads a CSV file (expects `container` and `image` columns).
@@ -152,3 +183,5 @@ Only `container` and `image` are required.
 The utility console output.
 
 ![Example output](RBuilder.png)
+
+
