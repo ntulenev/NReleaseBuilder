@@ -114,9 +114,7 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
         JiraStatusName[] allowedStatuses,
         IReadOnlyDictionary<JiraStatusName, int> statusStatistics)
     {
-        var label = allowedStatuses.Length == 0
-            ? "configured statuses"
-            : string.Join(", ", allowedStatuses.Select(static x => x.Value));
+        var label = allowedStatuses.BuildStatusFilterLabel();
 
         _ = column
             .Item()
@@ -130,14 +128,7 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
             return;
         }
 
-        var allowed = new HashSet<JiraStatusName>(allowedStatuses);
-        var topDisallowed = statusStatistics
-            .Where(x => !allowed.Contains(x.Key))
-            .OrderByDescending(static x => x.Value)
-            .ThenBy(static x => x.Key)
-            .Take(8)
-            .Select(static x => string.Format(CultureInfo.InvariantCulture, "{0} ({1})", x.Key.Value, x.Value))
-            .ToArray();
+        var topDisallowed = statusStatistics.BuildTopDisallowedStatusLabels(allowedStatuses);
 
         if (topDisallowed.Length == 0)
         {
@@ -178,7 +169,7 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
                 _ = table.Cell().Element(StylePdfBodyCell).Text(row.Component.Value);
                 _ = table.Cell().Element(StylePdfBodyCell).Text(row.Repository.Value);
                 _ = table.Cell().Element(StylePdfBodyCell).Text(row.CurrentVersion.Value);
-                _ = table.Cell().Element(StylePdfBodyCell).Text(FormatStatusPlain(row.Status));
+                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Status.ToPlainLabel());
             }
         });
 
@@ -221,7 +212,7 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
 
                 _ = details
                     .Item()
-                    .Text(BuildAheadCounterLabel(row.NewerVersions.Count, row.CurrentVersion.Value))
+                    .Text(row.NewerVersions.Count.ToAheadReleasesLabel() + " (current: " + row.CurrentVersion.Value + ")")
                     .Bold()
                     .FontColor(ResolveAheadCounterHexColor(row.NewerVersions.Count));
 
@@ -300,13 +291,13 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
         ColumnDescriptor column,
         IReadOnlyList<VersionJiraRow> versions)
     {
-        var detailsByTask = BuildTaskAlertDetailsByTask(versions);
+        var detailsByTask = versions.BuildTaskAlertDetailsByTask();
 
         var breakingChanges = detailsByTask
-            .Where(static detail => HasDetails(detail.BreakingChangesDetails))
+            .Where(static detail => detail.BreakingChangesDetails.HasDetails())
             .ToArray();
         var requiredActions = detailsByTask
-            .Where(static detail => HasDetails(detail.RequiredActionsDetails))
+            .Where(static detail => detail.RequiredActionsDetails.HasDetails())
             .ToArray();
 
         if (breakingChanges.Length == 0 && requiredActions.Length == 0)
@@ -346,63 +337,12 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
         }
     }
 
-    private static JiraTaskAlertDetails[] BuildTaskAlertDetailsByTask(IReadOnlyList<VersionJiraRow> versions)
-    {
-        var mergedByTask = new Dictionary<string, JiraTaskAlertDetails>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var version in versions)
-        {
-            foreach (var taskDetail in version.TaskAlertDetails)
-            {
-                if (!mergedByTask.TryGetValue(taskDetail.Task.Value, out var existing))
-                {
-                    mergedByTask[taskDetail.Task.Value] = taskDetail;
-                    continue;
-                }
-
-                mergedByTask[taskDetail.Task.Value] = MergeTaskAlertDetails(existing, taskDetail);
-            }
-        }
-
-        return
-        [
-            .. mergedByTask
-                .Values
-                .OrderBy(static detail => detail.Task.Value, StringComparer.OrdinalIgnoreCase)
-        ];
-    }
-
-    private static JiraTaskAlertDetails MergeTaskAlertDetails(
-        JiraTaskAlertDetails current,
-        JiraTaskAlertDetails candidate)
-    {
-        var title = string.Equals(current.Title.Value, "N/A", StringComparison.OrdinalIgnoreCase)
-            ? candidate.Title
-            : current.Title;
-        var status = string.Equals(current.Status.Value, "N/A", StringComparison.OrdinalIgnoreCase)
-            ? candidate.Status
-            : current.Status;
-        var requiredActionsDetails = HasDetails(current.RequiredActionsDetails)
-            ? current.RequiredActionsDetails
-            : candidate.RequiredActionsDetails;
-        var breakingChangesDetails = HasDetails(current.BreakingChangesDetails)
-            ? current.BreakingChangesDetails
-            : candidate.BreakingChangesDetails;
-
-        return new JiraTaskAlertDetails(
-            current.Task,
-            title,
-            status,
-            requiredActionsDetails,
-            breakingChangesDetails);
-    }
-
     private static void ComposePdfStatusDetailsSection(
         ColumnDescriptor column,
         IReadOnlyList<ComponentCheckRow> rows)
     {
         var rowsWithDetails = rows
-            .Where(static row => HasDetails(row.DetailsMessage.Value))
+            .Where(static row => row.DetailsMessage.Value.HasDetails())
             .ToArray();
 
         if (rowsWithDetails.Length == 0)
@@ -434,7 +374,7 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
             {
                 _ = table.Cell().Element(StylePdfBodyCell).Text(row.Index.Value.ToString(CultureInfo.InvariantCulture));
                 _ = table.Cell().Element(StylePdfBodyCell).Text(row.Component.Value);
-                _ = table.Cell().Element(StylePdfBodyCell).Text(FormatStatusPlain(row.Status));
+                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Status.ToPlainLabel());
                 _ = table.Cell().Element(StylePdfBodyCell).Text(row.DetailsMessage.Value);
             }
         });
@@ -444,7 +384,7 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
         ColumnDescriptor column,
         IReadOnlyList<ComponentCheckRow> rows)
     {
-        var uniqueTaskCountsByStatus = BuildUniqueJiraTaskCountsByStatus(rows);
+        var uniqueTaskCountsByStatus = rows.BuildUniqueJiraTaskCountsByStatus();
 
         _ = column.Item().Text("Unique Jira Tasks By Status").Bold().FontSize(12);
 
@@ -507,27 +447,6 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
             .PaddingHorizontal(6)
             .PaddingVertical(5);
 
-    private static string FormatStatusPlain(CheckStatus status)
-    {
-        return status switch
-        {
-            CheckStatus.UpToDate => "Up to date",
-            CheckStatus.Outdated => "Outdated",
-            CheckStatus.RepositoryNotFound => "Repo not found",
-            CheckStatus.BitbucketError => "Bitbucket error",
-            CheckStatus.InvalidCurrentVersion => "Invalid version",
-            _ => "Unknown",
-        };
-    }
-
-    private static string BuildAheadCounterLabel(int newerVersionCount, string currentVersion)
-    {
-        var aheadLabel = newerVersionCount == 1
-            ? "1 release ahead"
-            : string.Format(CultureInfo.InvariantCulture, "{0} releases ahead", newerVersionCount);
-        return aheadLabel + " (current: " + currentVersion + ")";
-    }
-
     private static string ResolveAheadCounterHexColor(int newerVersionCount)
     {
         return newerVersionCount switch
@@ -537,117 +456,6 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
             <= 5 => "#ea580c",
             _ => "#b91c1c",
         };
-    }
-
-    private static bool HasDetails(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        return !string.Equals(value.Trim(), "-", StringComparison.Ordinal);
-    }
-
-    private static Dictionary<JiraStatusName, int> BuildUniqueJiraTaskCountsByStatus(
-        IReadOnlyList<ComponentCheckRow> rows)
-    {
-        var uniqueTasksByStatus = new Dictionary<JiraStatusName, HashSet<string>>();
-
-        foreach (var row in rows)
-        {
-            foreach (var newerVersion in row.NewerVersions)
-            {
-                var taskKeys = SplitValues(newerVersion.JiraTask.Value);
-                var statusNames = SplitValues(newerVersion.JiraStatus.Value);
-
-                if (taskKeys.Length == 0 || statusNames.Length == 0)
-                {
-                    continue;
-                }
-
-                for (var i = 0; i < taskKeys.Length; i++)
-                {
-                    var taskKey = taskKeys[i];
-                    if (!IsTrackableJiraTask(taskKey))
-                    {
-                        continue;
-                    }
-
-                    var statusName = new JiraStatusName(ResolveStatusName(statusNames, i));
-
-                    if (!uniqueTasksByStatus.TryGetValue(statusName, out var taskSet))
-                    {
-#pragma warning disable IDE0028 // Simplify collection initialization
-                        taskSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-#pragma warning restore IDE0028 // Simplify collection initialization
-                        uniqueTasksByStatus[statusName] = taskSet;
-                    }
-
-                    _ = taskSet.Add(taskKey);
-                }
-            }
-        }
-
-        return uniqueTasksByStatus.ToDictionary(static x => x.Key, static x => x.Value.Count);
-    }
-
-    private static string[] SplitValues(string value) =>
-    [
-        .. value
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(static x => !string.IsNullOrWhiteSpace(x))
-    ];
-
-    private static string ResolveStatusName(string[] statusNames, int taskIndex)
-    {
-        if (statusNames.Length == 1)
-        {
-            return statusNames[0];
-        }
-
-        var statusIndex = taskIndex < statusNames.Length
-            ? taskIndex
-            : statusNames.Length - 1;
-        return statusNames[statusIndex];
-    }
-
-    private static bool IsTrackableJiraTask(string taskKey)
-    {
-        if (string.Equals(taskKey, "N/A", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var dashIndex = taskKey.IndexOf('-', StringComparison.Ordinal);
-        if (dashIndex <= 0 || dashIndex == taskKey.Length - 1)
-        {
-            return false;
-        }
-
-        if (!char.IsLetter(taskKey[0]))
-        {
-            return false;
-        }
-
-        for (var i = 1; i < dashIndex; i++)
-        {
-            var symbol = taskKey[i];
-            if (!char.IsLetterOrDigit(symbol) && symbol != '_')
-            {
-                return false;
-            }
-        }
-
-        for (var i = dashIndex + 1; i < taskKey.Length; i++)
-        {
-            if (!char.IsDigit(taskKey[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private readonly AppSettings _settings;
