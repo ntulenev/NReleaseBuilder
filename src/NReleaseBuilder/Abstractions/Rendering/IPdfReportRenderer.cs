@@ -1,6 +1,6 @@
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Rendering;
 
 /// <summary>
 /// PDF report rendering abstraction.

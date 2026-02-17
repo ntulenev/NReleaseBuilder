@@ -1,4 +1,4 @@
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Bitbucket.Internal;
 using NReleaseBuilder.Models;
 

@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Transport;
 
 namespace NReleaseBuilder.Transport;
 

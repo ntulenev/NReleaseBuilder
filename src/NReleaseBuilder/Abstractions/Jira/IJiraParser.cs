@@ -1,6 +1,6 @@
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Jira;
 
 /// <summary>
 /// Parses Jira task references from commit messages and alert details.

@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Transport;
 
 /// <summary>
 /// Executes HTTP GET requests with retry semantics for transient failures.

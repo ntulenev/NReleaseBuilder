@@ -1,6 +1,6 @@
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Bitbucket;
 
 /// <summary>
 /// Builds per-component version check rows from source data.

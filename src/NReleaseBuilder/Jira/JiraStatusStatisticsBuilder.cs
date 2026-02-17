@@ -1,4 +1,4 @@
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Jira;
 using NReleaseBuilder.Models;
 
 namespace NReleaseBuilder.Jira;

@@ -1,6 +1,6 @@
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Jira;
 
 /// <summary>
 /// Builds Jira status statistics from component check rows.

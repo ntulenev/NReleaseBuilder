@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Application;
 
 /// <summary>
 /// Application workflow for component release checks.

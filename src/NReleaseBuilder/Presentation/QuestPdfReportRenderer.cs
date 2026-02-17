@@ -2,7 +2,7 @@ using System.Globalization;
 
 using Microsoft.Extensions.Options;
 
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
 

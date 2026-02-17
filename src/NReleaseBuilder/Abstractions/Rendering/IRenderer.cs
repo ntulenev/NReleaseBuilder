@@ -1,11 +1,11 @@
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Rendering;
 
 /// <summary>
-/// Console-only rendering abstraction.
+/// Rendering abstraction for application output.
 /// </summary>
-public interface IConsoleOutputRenderer
+public interface IRenderer
 {
     /// <summary>
     /// Renders the initial run header.
@@ -65,6 +65,12 @@ public interface IConsoleOutputRenderer
         IReadOnlyList<JiraStatusName> allowedStatuses);
 
     /// <summary>
+    /// Renders final filtered results with diagnostics when nothing matches.
+    /// </summary>
+    /// <param name="rows">Rows to render.</param>
+    void RenderResults(IReadOnlyList<ComponentCheckRow> rows);
+
+    /// <summary>
     /// Renders component status table.
     /// </summary>
     /// <param name="rows">Rows to render.</param>
@@ -77,10 +83,13 @@ public interface IConsoleOutputRenderer
     void RenderSummary(IReadOnlyList<ComponentCheckRow> rows);
 
     /// <summary>
-    /// Renders unique Jira task distribution chart by status.
+    /// Renders plain text ready for Slack.
     /// </summary>
-    /// <param name="rows">Rows to analyze.</param>
-    void RenderUniqueJiraTaskStatusChart(IReadOnlyList<ComponentCheckRow> rows);
+    /// <param name="rows">Rows to include.</param>
+    /// <param name="allowedStatuses">Configured Jira filter.</param>
+    void RenderSlackCopyText(
+        IReadOnlyList<ComponentCheckRow> rows,
+        IReadOnlyList<JiraStatusName> allowedStatuses);
 
     /// <summary>
     /// Prints an error message.

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Transport;
 
 namespace NReleaseBuilder.Transport;
 

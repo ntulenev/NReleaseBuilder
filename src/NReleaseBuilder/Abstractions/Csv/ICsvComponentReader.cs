@@ -1,6 +1,6 @@
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Csv;
 
 /// <summary>
 /// Reads component/version rows from CSV input.

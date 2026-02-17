@@ -1,6 +1,6 @@
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Jira;
 
 /// <summary>
 /// Resolves Jira task keys from commit messages and enriches them with Jira data.

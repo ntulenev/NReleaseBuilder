@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Transport;
 
 /// <summary>
 /// Deserializes HTTP response content into typed objects.

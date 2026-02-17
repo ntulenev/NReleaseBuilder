@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 
 using Microsoft.Extensions.Options;
 
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Jira;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Jira.Internal;
 using NReleaseBuilder.Jira.Internal.Models;

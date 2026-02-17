@@ -1,6 +1,7 @@
 using Microsoft.VisualBasic.FileIO;
 
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Csv;
+using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
 

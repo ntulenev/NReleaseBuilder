@@ -1,6 +1,7 @@
 using System.Text.Json;
 
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Bitbucket;
+using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Models;
 
 using NuGet.Versioning;

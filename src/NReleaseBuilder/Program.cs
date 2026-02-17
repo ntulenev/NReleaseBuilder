@@ -1,9 +1,15 @@
 using System.Net.Http.Headers;
 using System.Text;
 
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Application;
+using NReleaseBuilder.Abstractions.Bitbucket;
+using NReleaseBuilder.Abstractions.Csv;
+using NReleaseBuilder.Abstractions.Jira;
+using NReleaseBuilder.Abstractions.Rendering;
+using NReleaseBuilder.Abstractions.Transport;
 using NReleaseBuilder.Application;
 using NReleaseBuilder.Bitbucket;
+using NReleaseBuilder.Bitbucket.Internal;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Csv;
 using NReleaseBuilder.Jira;
@@ -52,6 +58,8 @@ builder.Services.AddHttpClient(HttpClientNames.JIRA, (sp, http) =>
 builder.Services.AddTransient<ICsvComponentReader, CsvComponentReader>();
 builder.Services.AddTransient<IHttpRetryExecutor, HttpRetryExecutor>();
 builder.Services.AddTransient<IResponseSerializer, ResponseSerializer>();
+builder.Services.AddTransient<IBitbucketIntegrationCore, BitbucketIntegrationCore>();
+builder.Services.AddTransient<IBitbucketTagLookupCore, BitbucketTagLookupCore>();
 builder.Services.AddTransient<IJiraParser, JiraParser>();
 builder.Services.AddTransient<IJiraIntegrationCore, JiraIntegrationCore>();
 builder.Services.AddTransient<IJiraTaskResolver, JiraTaskResolver>();

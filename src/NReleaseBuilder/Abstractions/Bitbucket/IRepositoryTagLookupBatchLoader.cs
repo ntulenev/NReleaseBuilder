@@ -2,7 +2,7 @@ using NReleaseBuilder.Models;
 
 using NuGet.Versioning;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Bitbucket;
 
 /// <summary>
 /// Loads repository tag lookups from Bitbucket in batches.

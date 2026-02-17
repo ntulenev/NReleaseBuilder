@@ -2,7 +2,8 @@ using System.Net;
 
 using Microsoft.Extensions.Options;
 
-using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Abstractions.Jira;
+using NReleaseBuilder.Abstractions.Transport;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Jira.Internal.Models;
 using NReleaseBuilder.Models;

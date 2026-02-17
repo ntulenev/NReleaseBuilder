@@ -1,7 +1,7 @@
 using NReleaseBuilder.Jira.Internal.Models;
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Abstractions;
+namespace NReleaseBuilder.Abstractions.Jira;
 
 /// <summary>
 /// Jira integration operations for loading Jira task metadata from Jira API.
