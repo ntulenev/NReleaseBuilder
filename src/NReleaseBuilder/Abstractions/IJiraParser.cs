@@ -1,3 +1,5 @@
+using NReleaseBuilder.Models;
+
 namespace NReleaseBuilder.Abstractions;
 
 /// <summary>
@@ -8,29 +10,27 @@ public interface IJiraParser
     /// <summary>
     /// Extracts Jira task keys from a commit message.
     /// </summary>
-    /// <param name="commitMessage">Commit message that may include Jira task keys.</param>
+    /// <param name="commitInfo">Commit payload that may include Jira task keys.</param>
     /// <param name="projectNames">Allowed Jira project keys.</param>
-    /// <returns>Comma-separated task keys or <c>N/A</c> when none are found.</returns>
-    string ExtractJiraTask(string? commitMessage, IReadOnlyList<string> projectNames);
+    /// <returns>Extracted Jira task reference.</returns>
+    JiraTaskReference ExtractJiraTask(CommitInfo commitInfo, IReadOnlyList<JiraProjectName> projectNames);
 
     /// <summary>
     /// Splits a comma-separated Jira task string into unique task keys.
     /// </summary>
-    /// <param name="jiraTask">Comma-separated Jira task keys.</param>
+    /// <param name="jiraTask">Jira task reference.</param>
     /// <returns>Distinct Jira task keys.</returns>
-    string[] SplitJiraTasks(string jiraTask);
+    JiraTaskReference[] SplitJiraTasks(JiraTaskReference jiraTask);
 
     /// <summary>
     /// Determines whether alert details reference Jira tasks from other project items.
     /// </summary>
     /// <param name="currentTask">Current Jira task key.</param>
-    /// <param name="requiredActionsDetails">Required actions details text.</param>
-    /// <param name="breakingChangesDetails">Breaking changes details text.</param>
+    /// <param name="alertDetails">Required actions and breaking changes details.</param>
     /// <param name="projectNames">Allowed Jira project keys.</param>
     /// <returns><see langword="true"/> when another Jira task is referenced; otherwise <see langword="false"/>.</returns>
     bool HasDependencyIssue(
-        string currentTask,
-        string? requiredActionsDetails,
-        string? breakingChangesDetails,
-        IReadOnlyList<string> projectNames);
+        JiraTaskReference currentTask,
+        JiraAlertDetails alertDetails,
+        IReadOnlyList<JiraProjectName> projectNames);
 }

@@ -30,8 +30,8 @@ public static class TransportMappings
             }
 
             var tagName = valueDto.Name.Trim();
-            var commitHash = NormalizeOptional(valueDto.Target?.Hash);
-            values.Add(new RepositoryTagReference(tagName, commitHash));
+            var commitHash = CommitHash.FromOptional(valueDto.Target?.Hash);
+            values.Add(new RepositoryTagReference(new VersionLabel(tagName), commitHash));
         }
 
         return new RepositoryTagPage(values, CreateUriOrNull(dto.Next));
@@ -258,10 +258,6 @@ public static class TransportMappings
             _ => false,
         };
     }
-
-
-    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
     private static string NormalizeIssueTitle(string? value) => string.IsNullOrWhiteSpace(value) ? "N/A" : value.Trim();
 
     private static Uri? CreateUriOrNull(string? next)

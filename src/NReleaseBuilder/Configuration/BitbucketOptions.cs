@@ -79,7 +79,7 @@ public sealed class BitbucketOptions
     /// Resolves project keys from current and backward-compatible fields.
     /// </summary>
     /// <returns>Distinct project keys.</returns>
-    public string[] ResolveProjectNames()
+    public JiraProjectName[] ResolveProjectNames()
     {
         if (ProjectNames.Count > 0)
         {
@@ -89,12 +89,13 @@ public sealed class BitbucketOptions
                     .Where(static x => !string.IsNullOrWhiteSpace(x))
                     .Select(static x => x.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Select(static x => new JiraProjectName(x))
             ];
         }
 
         return string.IsNullOrWhiteSpace(ProjectName)
             ? []
-            : [ProjectName.Trim()];
+            : [new JiraProjectName(ProjectName)];
     }
 
     /// <summary>

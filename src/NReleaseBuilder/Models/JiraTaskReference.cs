@@ -33,6 +33,11 @@ public readonly record struct JiraTaskReference
     /// </summary>
     public string Value { get; }
 
+    /// <summary>
+    /// Gets a not-available Jira task reference.
+    /// </summary>
+    public static JiraTaskReference NotAvailable { get; } = new("N/A");
+
     /// <inheritdoc />
     public override string ToString() => Value ?? string.Empty;
 }

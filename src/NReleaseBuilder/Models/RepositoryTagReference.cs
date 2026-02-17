@@ -10,21 +10,19 @@ public readonly record struct RepositoryTagReference
     /// </summary>
     /// <param name="name">Tag name.</param>
     /// <param name="commitHash">Commit hash associated with tag.</param>
-    public RepositoryTagReference(string name, string? commitHash)
+    public RepositoryTagReference(VersionLabel name, CommitHash? commitHash)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        Name = name.Trim();
-        CommitHash = string.IsNullOrWhiteSpace(commitHash) ? null : commitHash.Trim();
+        Name = name;
+        CommitHash = commitHash;
     }
 
     /// <summary>
     /// Tag name.
     /// </summary>
-    public string Name { get; }
+    public VersionLabel Name { get; }
 
     /// <summary>
     /// Commit hash associated with tag.
     /// </summary>
-    public string? CommitHash { get; }
+    public CommitHash? CommitHash { get; }
 }

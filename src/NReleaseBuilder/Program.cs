@@ -53,6 +53,7 @@ builder.Services.AddTransient<ICsvComponentReader, CsvComponentReader>();
 builder.Services.AddTransient<IHttpRetryExecutor, HttpRetryExecutor>();
 builder.Services.AddTransient<IResponseSerializer, ResponseSerializer>();
 builder.Services.AddTransient<IJiraParser, JiraParser>();
+builder.Services.AddTransient<IJiraIntegrationCore, JiraIntegrationCore>();
 builder.Services.AddTransient<IJiraTaskResolver, JiraTaskResolver>();
 builder.Services.AddTransient<IBitbucketTagClient, BitbucketTagClient>();
 builder.Services.AddTransient<IRepositoryTagLookupBatchLoader, RepositoryTagLookupBatchLoader>();

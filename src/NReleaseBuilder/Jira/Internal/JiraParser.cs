@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 
 using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Models;
 
 namespace NReleaseBuilder.Jira.Internal;
 
@@ -10,24 +11,26 @@ namespace NReleaseBuilder.Jira.Internal;
 public sealed class JiraParser : IJiraParser
 {
     /// <inheritdoc />
-    public string ExtractJiraTask(string? commitMessage, IReadOnlyList<string> projectNames)
+    public JiraTaskReference ExtractJiraTask(CommitInfo commitInfo, IReadOnlyList<JiraProjectName> projectNames)
     {
+        ArgumentNullException.ThrowIfNull(commitInfo);
         ArgumentNullException.ThrowIfNull(projectNames);
 
+        var commitMessage = commitInfo.Message;
         if (string.IsNullOrWhiteSpace(commitMessage) || projectNames.Count == 0)
         {
-            return "N/A";
+            return JiraTaskReference.NotAvailable;
         }
 
         var projectNamePattern = string.Join(
             "|",
-            projectNames.Select(static projectName => Regex.Escape(projectName)));
+            projectNames.Select(static projectName => Regex.Escape(projectName.Value)));
         var pattern = $@"\b(?<project>{projectNamePattern})-\d+\b";
         var matches = Regex.Matches(commitMessage, pattern, RegexOptions.IgnoreCase);
 
         if (matches.Count == 0)
         {
-            return "N/A";
+            return JiraTaskReference.NotAvailable;
         }
 
         var selectedProjectName = matches[0].Groups["project"].Value;
@@ -41,32 +44,32 @@ public sealed class JiraParser : IJiraParser
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        return string.Join(", ", jiraTasks);
+        return new JiraTaskReference(string.Join(", ", jiraTasks));
     }
 
     /// <inheritdoc />
-    public string[] SplitJiraTasks(string jiraTask)
+    public JiraTaskReference[] SplitJiraTasks(JiraTaskReference jiraTask)
     {
-        if (string.IsNullOrWhiteSpace(jiraTask) || string.Equals(jiraTask, "N/A", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(jiraTask.Value, JiraTaskReference.NotAvailable.Value, StringComparison.OrdinalIgnoreCase))
         {
             return [];
         }
 
         return
         [
-            .. jiraTask
+            .. jiraTask.Value
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Where(static x => !string.IsNullOrWhiteSpace(x))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(static task => new JiraTaskReference(task))
         ];
     }
 
     /// <inheritdoc />
     public bool HasDependencyIssue(
-        string currentTask,
-        string? requiredActionsDetails,
-        string? breakingChangesDetails,
-        IReadOnlyList<string> projectNames)
+        JiraTaskReference currentTask,
+        JiraAlertDetails alertDetails,
+        IReadOnlyList<JiraProjectName> projectNames)
     {
         ArgumentNullException.ThrowIfNull(projectNames);
 
@@ -77,7 +80,7 @@ public sealed class JiraParser : IJiraParser
 
         var details = string.Join(
             Environment.NewLine,
-            new[] { requiredActionsDetails, breakingChangesDetails }
+            new[] { alertDetails.RequiredActionsDetails, alertDetails.BreakingChangesDetails }
                 .Where(static text => !string.IsNullOrWhiteSpace(text)));
 
         if (string.IsNullOrWhiteSpace(details))
@@ -87,7 +90,7 @@ public sealed class JiraParser : IJiraParser
 
         var projectNamePattern = string.Join(
             "|",
-            projectNames.Select(static projectName => Regex.Escape(projectName)));
+            projectNames.Select(static projectName => Regex.Escape(projectName.Value)));
         if (string.IsNullOrWhiteSpace(projectNamePattern))
         {
             return false;
@@ -102,7 +105,7 @@ public sealed class JiraParser : IJiraParser
         foreach (Match match in matches)
         {
             var taskReference = match.Value.ToUpperInvariant();
-            if (!string.Equals(taskReference, currentTask, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(taskReference, currentTask.Value, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

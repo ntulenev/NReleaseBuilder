@@ -10,12 +10,12 @@ public interface IJiraTaskResolver
     /// <summary>
     /// Resolves Jira details for tasks found in a commit message.
     /// </summary>
-    /// <param name="commitMessage">Commit message that may include Jira task keys.</param>
+    /// <param name="commitInfo">Commit payload that may include Jira task keys.</param>
     /// <param name="projectNames">Allowed Jira project keys used for task extraction.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Resolved Jira information for output rendering.</returns>
     Task<JiraTaskResolution> ResolveFromCommitMessageAsync(
-        string? commitMessage,
-        IReadOnlyList<string> projectNames,
+        CommitInfo commitInfo,
+        IReadOnlyList<JiraProjectName> projectNames,
         CancellationToken cancellationToken);
 }

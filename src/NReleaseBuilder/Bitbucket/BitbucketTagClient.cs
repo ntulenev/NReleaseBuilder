@@ -224,7 +224,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         BitbucketOptions options,
         RepositoryName sourceRepository,
         RepositoryName repositoryForBitbucketCalls,
-        string[] projectNames,
+        JiraProjectName[] projectNames,
         RepositoryTagReference[] tagsToInspect,
         BitbucketProgressCallbacks? progress,
         CancellationToken cancellationToken)
@@ -247,10 +247,10 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                 cancellationToken).ConfigureAwait(false);
 
             enrichedTags.Add(new RepositoryTagInfo(
-                new VersionLabel(tag.Name),
-                new JiraTaskReference(jiraResolution.Tasks),
-                new JiraTitleReference(jiraResolution.Titles),
-                new JiraStatusReference(jiraResolution.Statuses),
+                tag.Name,
+                jiraResolution.Tasks,
+                jiraResolution.Titles,
+                jiraResolution.Statuses,
                 jiraResolution.TaskAlertDetails,
                 jiraResolution.HasRequiredActions,
                 jiraResolution.HasBreakingChanges,
@@ -268,36 +268,36 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         IJiraTaskResolver jiraTaskResolver,
         BitbucketOptions options,
         RepositoryName repositoryForBitbucketCalls,
-        string[] projectNames,
-        string? commitHash,
+        JiraProjectName[] projectNames,
+        CommitHash? commitHash,
         Dictionary<string, JiraTaskResolution> jiraCacheByCommit,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(commitHash))
+        if (commitHash is null)
         {
-            return JiraTaskResolution.NotAvailable("N/A");
+            return JiraTaskResolution.NotAvailable(JiraTaskReference.NotAvailable);
         }
 
-        if (jiraCacheByCommit.TryGetValue(commitHash, out var jiraResolution))
+        if (jiraCacheByCommit.TryGetValue(commitHash.Value.Value, out var jiraResolution))
         {
             return jiraResolution;
         }
 
-        var message = await TryGetCommitMessageAsync(
+        var commitInfo = await TryGetCommitMessageAsync(
             httpClient,
             httpRetryExecutor,
             responseSerializer,
             options,
             repositoryForBitbucketCalls,
-            commitHash,
+            commitHash.Value,
             cancellationToken).ConfigureAwait(false);
 
         jiraResolution = await jiraTaskResolver.ResolveFromCommitMessageAsync(
-                message,
+                commitInfo,
                 projectNames,
                 cancellationToken)
             .ConfigureAwait(false);
-        jiraCacheByCommit[commitHash] = jiraResolution;
+        jiraCacheByCommit[commitHash.Value.Value] = jiraResolution;
 
         return jiraResolution;
     }
@@ -351,7 +351,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         }
 
         var distinctTags = tags
-            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(x => x.Name.Value, StringComparer.OrdinalIgnoreCase)
             .Select(x => x.First())
             .ToArray();
 
@@ -371,20 +371,20 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         return new RepositoryName(value[..lastDotIndex]);
     }
 
-    private static async Task<string?> TryGetCommitMessageAsync(
+    private static async Task<CommitInfo> TryGetCommitMessageAsync(
         HttpClient httpClient,
         IHttpRetryExecutor httpRetryExecutor,
         IResponseSerializer responseSerializer,
         BitbucketOptions options,
         RepositoryName repository,
-        string commitHash,
+        CommitHash commitHash,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpRetryExecutor);
         ArgumentNullException.ThrowIfNull(responseSerializer);
 
         var commitUrl = new Uri(
-            $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash)}",
+            $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash.Value)}",
             UriKind.Relative);
 
         using var response = await httpRetryExecutor.GetAsync(
@@ -395,14 +395,14 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
 
         if (!response.IsSuccessStatusCode)
         {
-            return null;
+            return new CommitInfo(null);
         }
 
         var commit = await ReadCommitInfoAsync(
             response,
             responseSerializer,
             cancellationToken).ConfigureAwait(false);
-        return commit?.Message;
+        return commit ?? new CommitInfo(null);
     }
 
     private static async Task<RepositoryTagPage> ReadTagPageAsync(

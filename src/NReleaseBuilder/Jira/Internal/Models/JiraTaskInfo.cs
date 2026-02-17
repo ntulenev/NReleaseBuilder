@@ -1,5 +1,7 @@
 using System.Net;
 
+using NReleaseBuilder.Models;
+
 namespace NReleaseBuilder.Jira.Internal.Models;
 
 /// <summary>
@@ -11,6 +13,18 @@ public readonly record struct JiraTaskInfo(
     string? RequiredActionsDetails,
     string? BreakingChangesDetails)
 {
+    /// <summary>
+    /// Creates Jira task info from Jira issue domain model.
+    /// </summary>
+    /// <param name="issue">Jira issue info.</param>
+    /// <returns>Mapped Jira task info.</returns>
+    public static JiraTaskInfo FromIssueInfo(JiraIssueInfo? issue)
+        => new(
+            issue?.StatusName?.Value ?? "N/A",
+            issue?.Title ?? "N/A",
+            issue?.RequiredActionsDetails,
+            issue?.BreakingChangesDetails);
+
     /// <summary>
     /// Creates Jira task info for not-found Jira issues.
     /// </summary>
