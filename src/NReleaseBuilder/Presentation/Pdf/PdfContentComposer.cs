@@ -1,114 +1,39 @@
 using System.Globalization;
 
-using Microsoft.Extensions.Options;
-
 using NReleaseBuilder.Abstractions.Rendering;
-using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
 
 using QuestPDF.Fluent;
-using QuestPDF.Helpers;
 
-using QContainer = QuestPDF.Infrastructure.IContainer;
-using QLicenseType = QuestPDF.Infrastructure.LicenseType;
-
-namespace NReleaseBuilder.Presentation;
+namespace NReleaseBuilder.Presentation.Pdf;
 
 /// <summary>
-/// QuestPDF implementation for PDF report rendering.
+/// Default implementation for composing PDF page content.
 /// </summary>
-public sealed class QuestPdfReportRenderer : IPdfReportRenderer
+public sealed class PdfContentComposer : IPdfContentComposer
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="QuestPdfReportRenderer"/> class.
-    /// </summary>
-    /// <param name="options">Application settings options.</param>
-    public QuestPdfReportRenderer(IOptions<AppSettings> options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        _settings = options.Value;
-    }
-
     /// <inheritdoc />
-    public void RenderReport(
+    public void ComposeContent(
+        ColumnDescriptor column,
         ComponentCheckRow[] rows,
         JiraStatusName[] allowedStatuses,
         IReadOnlyDictionary<JiraStatusName, int> statusStatistics)
     {
+        ArgumentNullException.ThrowIfNull(column);
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(allowedStatuses);
         ArgumentNullException.ThrowIfNull(statusStatistics);
 
-        if (!_settings.Pdf.Enabled)
+        column.Spacing(10);
+
+        if (rows.Length == 0)
         {
+            ComposePdfEmptyStateSection(column, allowedStatuses, statusStatistics);
             return;
         }
 
-        var outputPath = _settings.Pdf.ResolveOutputPath();
-        var outputDirectory = Path.GetDirectoryName(outputPath);
-
-        if (!string.IsNullOrWhiteSpace(outputDirectory))
-        {
-            _ = Directory.CreateDirectory(outputDirectory);
-        }
-
-        QuestPDF.Settings.License = QLicenseType.Community;
-
-        Document
-            .Create(container =>
-            {
-                _ = container.Page(page =>
-                {
-                    page.Size(PageSizes.A4.Landscape());
-                    page.Margin(20);
-                    page.DefaultTextStyle(static style => style.FontSize(9));
-
-                    page.Header().Column(column =>
-                    {
-                        column.Spacing(2);
-                        _ = column.Item().Text("Components Version Check").Bold().FontSize(16);
-                        _ = column.Item().Text(
-                            string.Format(
-                                CultureInfo.InvariantCulture,
-                                "Generated: {0:yyyy-MM-dd HH:mm:ss zzz}",
-                                DateTimeOffset.Now));
-                        _ = column.Item().Text("Source: " + _settings.CsvFilePath);
-                        _ = column.Item().Text("Workspace: " + _settings.Bitbucket.Workspace);
-
-                        if (allowedStatuses.Length > 0)
-                        {
-                            _ = column.Item().Text(
-                                "Jira Status Filter: "
-                                + string.Join(", ", allowedStatuses.Select(static x => x.Value)));
-                        }
-                    });
-
-                    page.Content().PaddingTop(8).Column(column =>
-                    {
-                        column.Spacing(10);
-
-                        if (rows.Length == 0)
-                        {
-                            ComposePdfEmptyStateSection(column, allowedStatuses, statusStatistics);
-                            return;
-                        }
-
-                        ComposePdfResultsSection(column, rows);
-                        ComposePdfUniqueJiraTaskStatusSection(column, rows);
-                    });
-
-                    page.Footer().AlignRight().Text(text =>
-                    {
-                        _ = text.Span("Page ");
-                        _ = text.CurrentPageNumber();
-                        _ = text.Span(" / ");
-                        _ = text.TotalPages();
-                    });
-                });
-            })
-            .GeneratePdf(outputPath);
-
-        Console.WriteLine($"PDF report saved to: {outputPath}");
+        ComposePdfResultsSection(column, rows);
+        ComposePdfUniqueJiraTaskStatusSection(column, rows);
     }
 
     private static void ComposePdfEmptyStateSection(
@@ -158,20 +83,20 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
 
             table.Header(header =>
             {
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("#");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Component");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Repository");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Current Version");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Status");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("#");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Component");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Repository");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Current Version");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Status");
             });
 
             foreach (var row in rows)
             {
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Index.Value.ToString(CultureInfo.InvariantCulture));
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Component.Value);
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Repository.Value);
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.CurrentVersion.Value);
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Status.ToPlainLabel());
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Index.Value.ToString(CultureInfo.InvariantCulture));
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Component.Value);
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Repository.Value);
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.CurrentVersion.Value);
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Status.ToPlainLabel());
             }
         });
 
@@ -216,7 +141,7 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
                     .Item()
                     .Text(row.NewerVersions.Count.ToAheadReleasesLabel() + " (current: " + row.CurrentVersion.Value + ")")
                     .Bold()
-                    .FontColor(ResolveAheadCounterHexColor(row.NewerVersions.Count));
+                    .FontColor(PdfPresentationHelpers.ResolveAheadCounterHexColor(row.NewerVersions.Count));
 
                 details.Item().Table(table =>
                 {
@@ -231,20 +156,20 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
 
                     table.Header(header =>
                     {
-                        _ = header.Cell().Element(StylePdfHeaderCell).Text("Version");
-                        _ = header.Cell().Element(StylePdfHeaderCell).Text("JiraTask");
-                        _ = header.Cell().Element(StylePdfHeaderCell).Text("JiraTitle");
-                        _ = header.Cell().Element(StylePdfHeaderCell).Text("JiraStatus");
-                        _ = header.Cell().Element(StylePdfHeaderCell).Text("Alerts");
+                        _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Version");
+                        _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("JiraTask");
+                        _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("JiraTitle");
+                        _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("JiraStatus");
+                        _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Alerts");
                     });
 
                     foreach (var version in row.NewerVersions)
                     {
-                        _ = table.Cell().Element(StylePdfBodyCell).Text(version.Version.Value);
-                        _ = table.Cell().Element(StylePdfBodyCell).Text(version.JiraTask.Value);
-                        _ = table.Cell().Element(StylePdfBodyCell).Text(version.JiraTitle.Value);
-                        _ = table.Cell().Element(StylePdfBodyCell).Text(version.JiraStatus.Value);
-                        table.Cell().Element(StylePdfBodyCell).Text(text =>
+                        _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.Version.Value);
+                        _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.JiraTask.Value);
+                        _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.JiraTitle.Value);
+                        _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.JiraStatus.Value);
+                        table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(text =>
                         {
                             if (!version.HasRequiredActions && !version.HasBreakingChanges && !version.HasDependencyIssues)
                             {
@@ -335,7 +260,7 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
         foreach (var taskDetail in taskDetails)
         {
             _ = column.Item().Text(taskDetail.Task.Value + " - " + taskDetail.Title.Value).Bold();
-            _ = column.Item().Element(StylePdfAlertDetailsBox).Text(detailSelector(taskDetail));
+            _ = column.Item().Element(PdfPresentationHelpers.StylePdfAlertDetailsBox).Text(detailSelector(taskDetail));
         }
     }
 
@@ -366,18 +291,18 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
 
             table.Header(header =>
             {
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("#");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Component");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Status");
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Details");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("#");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Component");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Status");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Details");
             });
 
             foreach (var row in rowsWithDetails)
             {
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Index.Value.ToString(CultureInfo.InvariantCulture));
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Component.Value);
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.Status.ToPlainLabel());
-                _ = table.Cell().Element(StylePdfBodyCell).Text(row.DetailsMessage.Value);
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Index.Value.ToString(CultureInfo.InvariantCulture));
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Component.Value);
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Status.ToPlainLabel());
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.DetailsMessage.Value);
             }
         });
     }
@@ -411,54 +336,18 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
 
             table.Header(header =>
             {
-                _ = header.Cell().Element(StylePdfHeaderCell).Text("Status");
-                _ = header.Cell().Element(StylePdfHeaderCell).AlignRight().Text("Unique Tasks");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).Text("Status");
+                _ = header.Cell().Element(PdfPresentationHelpers.StylePdfHeaderCell).AlignRight().Text("Unique Tasks");
             });
 
             foreach (var (status, taskCount) in orderedEntries)
             {
-                _ = table.Cell().Element(StylePdfBodyCell).Text(status.Value);
+                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(status.Value);
                 _ = table.Cell()
-                    .Element(StylePdfBodyCell)
+                    .Element(PdfPresentationHelpers.StylePdfBodyCell)
                     .AlignRight()
                     .Text(taskCount.ToString(CultureInfo.InvariantCulture));
             }
         });
     }
-
-    private static QContainer StylePdfHeaderCell(QContainer container) =>
-        container
-            .Background("#f3f4f6")
-            .Border(1)
-            .BorderColor("#d1d5db")
-            .PaddingHorizontal(6)
-            .PaddingVertical(4);
-
-    private static QContainer StylePdfBodyCell(QContainer container) =>
-        container
-            .BorderBottom(1)
-            .BorderColor("#e5e7eb")
-            .PaddingHorizontal(6)
-            .PaddingVertical(4);
-
-    private static QContainer StylePdfAlertDetailsBox(QContainer container) =>
-        container
-            .Border(1)
-            .BorderColor("#d1d5db")
-            .Background("#f9fafb")
-            .PaddingHorizontal(6)
-            .PaddingVertical(5);
-
-    private static string ResolveAheadCounterHexColor(int newerVersionCount)
-    {
-        return newerVersionCount switch
-        {
-            <= 0 => "#6b7280",
-            <= 2 => "#ca8a04",
-            <= 5 => "#ea580c",
-            _ => "#b91c1c",
-        };
-    }
-
-    private readonly AppSettings _settings;
 }

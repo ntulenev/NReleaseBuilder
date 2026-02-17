@@ -83,15 +83,6 @@ public interface IRenderer
     void RenderSummary(IReadOnlyList<ComponentCheckRow> rows);
 
     /// <summary>
-    /// Renders plain text ready for Slack.
-    /// </summary>
-    /// <param name="rows">Rows to include.</param>
-    /// <param name="allowedStatuses">Configured Jira filter.</param>
-    void RenderSlackCopyText(
-        IReadOnlyList<ComponentCheckRow> rows,
-        IReadOnlyList<JiraStatusName> allowedStatuses);
-
-    /// <summary>
     /// Prints an error message.
     /// </summary>
     /// <param name="message">Error details.</param>

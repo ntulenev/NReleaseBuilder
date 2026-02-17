@@ -15,6 +15,8 @@ using NReleaseBuilder.Csv;
 using NReleaseBuilder.Jira;
 using NReleaseBuilder.Jira.Internal;
 using NReleaseBuilder.Presentation;
+using NReleaseBuilder.Presentation.Console;
+using NReleaseBuilder.Presentation.Pdf;
 using NReleaseBuilder.Transport;
 
 using Microsoft.Extensions.Configuration;
@@ -68,6 +70,8 @@ builder.Services.AddTransient<IRepositoryTagLookupBatchLoader, RepositoryTagLook
 builder.Services.AddTransient<IComponentVersionChecker, ComponentVersionChecker>();
 builder.Services.AddTransient<IJiraStatusStatisticsBuilder, JiraStatusStatisticsBuilder>();
 builder.Services.AddTransient<IConsoleOutputRenderer, SpectreConsoleOutputRenderer>();
+builder.Services.AddTransient<IPdfContentComposer, PdfContentComposer>();
+builder.Services.AddTransient<IPdfReportFileStore, PdfReportFileStore>();
 builder.Services.AddTransient<IPdfReportRenderer, QuestPdfReportRenderer>();
 builder.Services.AddTransient<IRenderer, GeneralFacadeRenderer>();
 builder.Services.AddTransient<IVersionCheckApplication, VersionCheckApplication>();

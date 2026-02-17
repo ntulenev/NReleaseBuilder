@@ -82,7 +82,7 @@ public sealed class GeneralFacadeRenderer : IRenderer
         ArgumentNullException.ThrowIfNull(rows);
 
         var allowedStatuses = _settings.Jira.BuildAllowedStatuses();
-        var filteredRows = FilterRowsByAllowedJiraStatuses(rows, allowedStatuses);
+        var filteredRows = rows.FilterRowsByAllowedJiraStatuses(allowedStatuses);
         var statusStatistics = _jiraStatusStatisticsBuilder.Build(rows);
 
         if (filteredRows.Length == 0)
@@ -106,25 +106,7 @@ public sealed class GeneralFacadeRenderer : IRenderer
     public void RenderSummary(IReadOnlyList<ComponentCheckRow> rows) => _consoleRenderer.RenderSummary(rows);
 
     /// <inheritdoc />
-    public void RenderSlackCopyText(
-        IReadOnlyList<ComponentCheckRow> rows,
-        IReadOnlyList<JiraStatusName> allowedStatuses)
-    {
-        ArgumentNullException.ThrowIfNull(rows);
-        ArgumentNullException.ThrowIfNull(allowedStatuses);
-        // Slack output is intentionally disabled.
-    }
-
-    /// <inheritdoc />
     public void PrintError(ErrorMessage message) => _consoleRenderer.PrintError(message);
-
-    private static ComponentCheckRow[] FilterRowsByAllowedJiraStatuses(
-        IReadOnlyList<ComponentCheckRow> rows,
-        JiraStatusName[] allowedStatuses)
-    {
-        var allowed = new HashSet<JiraStatusName>(allowedStatuses);
-        return allowed.Count == 0 ? [.. rows] : [.. rows.Where(row => row.MatchesStatusFilter(allowed))];
-    }
 
     private readonly IConsoleOutputRenderer _consoleRenderer;
     private readonly IPdfReportRenderer _pdfReportRenderer;

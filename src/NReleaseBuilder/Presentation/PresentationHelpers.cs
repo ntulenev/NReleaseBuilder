@@ -51,6 +51,23 @@ internal static class PresentationHelpers
     }
 
     /// <summary>
+    /// Filters rows by allowed Jira statuses.
+    /// </summary>
+    /// <param name="rows">Rows to filter.</param>
+    /// <param name="allowedStatuses">Allowed Jira statuses.</param>
+    /// <returns>Rows matching configured status filter.</returns>
+    public static ComponentCheckRow[] FilterRowsByAllowedJiraStatuses(
+        this IReadOnlyList<ComponentCheckRow> rows,
+        JiraStatusName[] allowedStatuses)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(allowedStatuses);
+
+        var allowed = new HashSet<JiraStatusName>(allowedStatuses);
+        return allowed.Count == 0 ? [.. rows] : [.. rows.Where(row => row.MatchesStatusFilter(allowed))];
+    }
+
+    /// <summary>
     /// Checks whether a details field has meaningful text.
     /// </summary>
     /// <param name="value">Details value.</param>

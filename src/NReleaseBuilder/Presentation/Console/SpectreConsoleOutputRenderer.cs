@@ -6,7 +6,7 @@ using NReleaseBuilder.Models;
 
 using Spectre.Console;
 
-namespace NReleaseBuilder.Presentation;
+namespace NReleaseBuilder.Presentation.Console;
 
 /// <summary>
 /// Spectre.Console implementation for console-only rendering.
