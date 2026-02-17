@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 using NReleaseBuilder.Abstractions;
 
-namespace NReleaseBuilder.Jira;
+namespace NReleaseBuilder.Jira.Internal;
 
 /// <summary>
 /// Default Jira task parser implementation.

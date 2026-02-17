@@ -1,4 +1,6 @@
-namespace NReleaseBuilder.Models;
+using NReleaseBuilder.Models;
+
+namespace NReleaseBuilder.Bitbucket.Internal.Models;
 
 /// <summary>
 /// Result of loading repository tag references from Bitbucket.

@@ -4,7 +4,7 @@ using NReleaseBuilder.Models;
 
 using NuGet.Versioning;
 
-namespace NReleaseBuilder.Bitbucket;
+namespace NReleaseBuilder.Bitbucket.Internal;
 
 /// <summary>
 /// Parses semantic version values from tags and free-form text.

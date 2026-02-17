@@ -1,4 +1,4 @@
-using NReleaseBuilder.Bitbucket;
+using NReleaseBuilder.Bitbucket.Internal;
 
 using NuGet.Versioning;
 

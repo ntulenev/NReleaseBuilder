@@ -7,6 +7,7 @@ using NReleaseBuilder.Bitbucket;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Csv;
 using NReleaseBuilder.Jira;
+using NReleaseBuilder.Jira.Internal;
 using NReleaseBuilder.Presentation;
 using NReleaseBuilder.Transport;
 

@@ -1,6 +1,8 @@
 using System.Net;
 
 using NReleaseBuilder.Abstractions;
+using NReleaseBuilder.Bitbucket.Internal;
+using NReleaseBuilder.Bitbucket.Internal.Models;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Helpers;
 using NReleaseBuilder.Models;

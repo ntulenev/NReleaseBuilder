@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 
 using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Configuration;
+using NReleaseBuilder.Jira.Internal.Models;
 using NReleaseBuilder.Models;
 using NReleaseBuilder.Transport;
 using NReleaseBuilder.Transport.Models;

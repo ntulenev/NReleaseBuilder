@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Jira.Internal.Models;
 
 /// <summary>
 /// Resolved Jira task metadata used during aggregation and caching.
