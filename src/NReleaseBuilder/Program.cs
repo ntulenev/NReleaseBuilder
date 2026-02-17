@@ -46,6 +46,10 @@ builder.Services.AddHttpClient(HttpClientNames.JIRA, (sp, http) =>
 });
 
 builder.Services.AddTransient<ICsvComponentReader, CsvComponentReader>();
+builder.Services.AddTransient<IHttpRetryExecutor, HttpRetryExecutor>();
+builder.Services.AddTransient<IResponseSerializer, ResponseSerializer>();
+builder.Services.AddTransient<IJiraParser, JiraParser>();
+builder.Services.AddTransient<IJiraTaskResolver, JiraTaskResolver>();
 builder.Services.AddTransient<IBitbucketTagClient, BitbucketTagClient>();
 builder.Services.AddTransient<IRepositoryTagLookupBatchLoader, RepositoryTagLookupBatchLoader>();
 builder.Services.AddTransient<IComponentVersionChecker, ComponentVersionChecker>();

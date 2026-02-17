@@ -259,15 +259,9 @@ public static class TransportMappings
     }
 
 
-    private static string? NormalizeOptional(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
+    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static string NormalizeIssueTitle(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? "N/A" : value.Trim();
-    }
+    private static string NormalizeIssueTitle(string? value) => string.IsNullOrWhiteSpace(value) ? "N/A" : value.Trim();
 
     private static Uri? CreateUriOrNull(string? next)
     {

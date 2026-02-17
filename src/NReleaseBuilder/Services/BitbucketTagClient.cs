@@ -1,12 +1,8 @@
-using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Http.Headers;
-using System.Security.Cryptography;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 
 using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Configuration;
+using NReleaseBuilder.Helpers;
 using NReleaseBuilder.Models;
 using NReleaseBuilder.Transport;
 
@@ -17,7 +13,7 @@ using NuGet.Versioning;
 namespace NReleaseBuilder.Services;
 
 /// <summary>
-/// Bitbucket/Jira data loader for repository tags and Jira status enrichment.
+/// Bitbucket data loader for repository tags and Jira-enriched tag metadata.
 /// </summary>
 public sealed class BitbucketTagClient : IBitbucketTagClient
 {
@@ -26,19 +22,29 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
     /// </summary>
     /// <param name="httpClientFactory">HTTP client factory.</param>
     /// <param name="options">Application settings options.</param>
-    public BitbucketTagClient(IHttpClientFactory httpClientFactory, IOptions<AppSettings> options)
+    /// <param name="jiraTaskResolver">Jira task resolver.</param>
+    /// <param name="httpRetryExecutor">Shared HTTP retry executor.</param>
+    /// <param name="responseSerializer">HTTP response serializer.</param>
+    public BitbucketTagClient(
+        IHttpClientFactory httpClientFactory,
+        IOptions<AppSettings> options,
+        IJiraTaskResolver jiraTaskResolver,
+        IHttpRetryExecutor httpRetryExecutor,
+        IResponseSerializer responseSerializer)
     {
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(jiraTaskResolver);
+        ArgumentNullException.ThrowIfNull(httpRetryExecutor);
+        ArgumentNullException.ThrowIfNull(responseSerializer);
 
         var appSettings = options.Value;
-        ArgumentNullException.ThrowIfNull(appSettings);
-        ArgumentNullException.ThrowIfNull(appSettings.Bitbucket);
-        ArgumentNullException.ThrowIfNull(appSettings.Jira);
 
         _httpClientFactory = httpClientFactory;
         _bitbucketOptions = appSettings.Bitbucket;
-        _jiraOptions = appSettings.Jira;
+        _jiraTaskResolver = jiraTaskResolver;
+        _httpRetryExecutor = httpRetryExecutor;
+        _responseSerializer = responseSerializer;
     }
 
     /// <inheritdoc />
@@ -52,14 +58,9 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         ArgumentNullException.ThrowIfNull(minCurrentVersionsByRepository);
 
         var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
-        var jiraHttpClient = _httpClientFactory.CreateClient(HttpClientNames.JIRA);
         using var semaphore = new SemaphoreSlim(
             _bitbucketOptions.MaxParallelRequests,
             _bitbucketOptions.MaxParallelRequests);
-        using var jiraSemaphore = new SemaphoreSlim(
-            _jiraOptions.MaxParallelRequests,
-            _jiraOptions.MaxParallelRequests);
-        var jiraTaskInfoCacheByTask = new ConcurrentDictionary<string, JiraTaskInfo>(StringComparer.OrdinalIgnoreCase);
 
         var tasks = repositories.Select(async repository =>
         {
@@ -71,13 +72,12 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                 _ = minCurrentVersionsByRepository.TryGetValue(repository, out var minCurrentVersion);
                 var lookup = await GetRepositoryTagLookupAsync(
                         httpClient,
-                        jiraHttpClient,
+                        _httpRetryExecutor,
+                        _responseSerializer,
+                        _jiraTaskResolver,
                         _bitbucketOptions,
-                        _jiraOptions,
                         repository,
                         minCurrentVersion,
-                        jiraTaskInfoCacheByTask,
-                        jiraSemaphore,
                         progress,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -97,19 +97,64 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
 
     private static async Task<RepositoryTagLookup> GetRepositoryTagLookupAsync(
         HttpClient httpClient,
-        HttpClient jiraHttpClient,
+        IHttpRetryExecutor httpRetryExecutor,
+        IResponseSerializer responseSerializer,
+        IJiraTaskResolver jiraTaskResolver,
         BitbucketOptions options,
-        JiraOptions jiraOptions,
         RepositoryName repository,
         NuGetVersion? minCurrentVersion,
-        ConcurrentDictionary<string, JiraTaskInfo> jiraTaskInfoCacheByTask,
-        SemaphoreSlim jiraSemaphore,
         BitbucketProgressCallbacks? progress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(httpRetryExecutor);
+        ArgumentNullException.ThrowIfNull(responseSerializer);
+        ArgumentNullException.ThrowIfNull(jiraTaskResolver);
+
+        var (repositoryForBitbucketCalls, tagLoadResult) = await LoadRepositoryTagReferencesWithFallbackAsync(
+                httpClient,
+                httpRetryExecutor,
+                responseSerializer,
+                options,
+                repository,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (TryBuildFailedTagLookup(repositoryForBitbucketCalls, tagLoadResult) is { } failedTagLookup)
+        {
+            return failedTagLookup;
+        }
+
+        var tagsToInspect = SelectTagsToInspect(tagLoadResult.Tags, minCurrentVersion);
+        var projectNames = options.ResolveProjectNames();
+        progress?.CommitTotalDetected?.Invoke(repository.Value, tagsToInspect.Length);
+
+        var enrichedTags = await BuildEnrichedTagsAsync(
+            httpClient,
+            httpRetryExecutor,
+            responseSerializer,
+            jiraTaskResolver,
+            options,
+            repository,
+            repositoryForBitbucketCalls,
+            projectNames,
+            tagsToInspect,
+            progress,
+            cancellationToken).ConfigureAwait(false);
+        return RepositoryTagLookup.Success(repositoryForBitbucketCalls, enrichedTags);
+    }
+
+    private static async Task<(RepositoryName RepositoryForBitbucketCalls, RepositoryTagReferenceLoadResult TagLoadResult)> LoadRepositoryTagReferencesWithFallbackAsync(
+        HttpClient httpClient,
+        IHttpRetryExecutor httpRetryExecutor,
+        IResponseSerializer responseSerializer,
+        BitbucketOptions options,
+        RepositoryName repository,
         CancellationToken cancellationToken)
     {
         var repositoryForBitbucketCalls = options.ResolveRepositoryName(repository);
         var tagLoadResult = await LoadRepositoryTagReferencesAsync(
                 httpClient,
+                httpRetryExecutor,
+                responseSerializer,
                 options,
                 repositoryForBitbucketCalls,
                 cancellationToken)
@@ -121,6 +166,8 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
         {
             var fallbackLoadResult = await LoadRepositoryTagReferencesAsync(
                     httpClient,
+                    httpRetryExecutor,
+                    responseSerializer,
                     options,
                     truncatedRepository,
                     cancellationToken)
@@ -133,6 +180,13 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             }
         }
 
+        return (repositoryForBitbucketCalls, tagLoadResult);
+    }
+
+    private static RepositoryTagLookup? TryBuildFailedTagLookup(
+        RepositoryName repositoryForBitbucketCalls,
+        RepositoryTagReferenceLoadResult tagLoadResult)
+    {
         if (tagLoadResult.IsRepositoryMissing)
         {
             return RepositoryTagLookup.RepoNotFound(repositoryForBitbucketCalls);
@@ -143,75 +197,119 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             return RepositoryTagLookup.ApiError(repositoryForBitbucketCalls, tagLoadResult.Error);
         }
 
-        var projectNames = options.ResolveProjectNames();
+        return null;
+    }
 
-        var tagsToInspect = tagLoadResult.Tags
-            .Where(tag => minCurrentVersion is null
+    private static RepositoryTagReference[] SelectTagsToInspect(
+        IReadOnlyList<RepositoryTagReference> tags,
+        NuGetVersion? minCurrentVersion)
+    {
+        ArgumentNullException.ThrowIfNull(tags);
+
+        return
+        [
+            .. tags.Where(tag => minCurrentVersion is null
                 || (VersionParser.TryParse(tag.Name, out var parsedVersion) && parsedVersion > minCurrentVersion))
-            .ToArray();
+        ];
+    }
 
-        progress?.CommitTotalDetected?.Invoke(repository.Value, tagsToInspect.Length);
-
-        var jiraCacheByCommit = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static async Task<List<RepositoryTagInfo>> BuildEnrichedTagsAsync(
+        HttpClient httpClient,
+        IHttpRetryExecutor httpRetryExecutor,
+        IResponseSerializer responseSerializer,
+        IJiraTaskResolver jiraTaskResolver,
+        BitbucketOptions options,
+        RepositoryName sourceRepository,
+        RepositoryName repositoryForBitbucketCalls,
+        string[] projectNames,
+        RepositoryTagReference[] tagsToInspect,
+        BitbucketProgressCallbacks? progress,
+        CancellationToken cancellationToken)
+    {
+        var jiraCacheByCommit = new Dictionary<string, JiraTaskResolution>(StringComparer.OrdinalIgnoreCase);
         var enrichedTags = new List<RepositoryTagInfo>(tagsToInspect.Length);
 
         foreach (var tag in tagsToInspect)
         {
-            var jiraTask = "N/A";
-            var jiraTitle = "N/A";
-            var jiraStatus = "N/A";
-            var commitHash = tag.CommitHash;
-
-            if (!string.IsNullOrWhiteSpace(commitHash))
-            {
-                if (!jiraCacheByCommit.TryGetValue(commitHash, out jiraTask))
-                {
-                    var message = await TryGetCommitMessageAsync(
-                        httpClient,
-                        options,
-                        repositoryForBitbucketCalls,
-                        commitHash,
-                        cancellationToken).ConfigureAwait(false);
-
-                    jiraTask = ExtractJiraTask(message, projectNames);
-                    jiraCacheByCommit[commitHash] = jiraTask;
-                }
-            }
-
             var jiraResolution = await ResolveJiraTaskResolutionAsync(
-                jiraHttpClient,
-                jiraOptions,
-                jiraTask,
+                httpClient,
+                httpRetryExecutor,
+                responseSerializer,
+                jiraTaskResolver,
+                options,
+                repositoryForBitbucketCalls,
                 projectNames,
-                jiraTaskInfoCacheByTask,
-                jiraSemaphore,
+                tag.CommitHash,
+                jiraCacheByCommit,
                 cancellationToken).ConfigureAwait(false);
-
-            jiraStatus = jiraResolution.Statuses;
-            jiraTask = jiraResolution.Tasks;
-            jiraTitle = jiraResolution.Titles;
 
             enrichedTags.Add(new RepositoryTagInfo(
                 new VersionLabel(tag.Name),
-                new JiraTaskReference(jiraTask),
-                new JiraTitleReference(jiraTitle),
-                new JiraStatusReference(jiraStatus),
+                new JiraTaskReference(jiraResolution.Tasks),
+                new JiraTitleReference(jiraResolution.Titles),
+                new JiraStatusReference(jiraResolution.Statuses),
                 jiraResolution.TaskAlertDetails,
                 jiraResolution.HasRequiredActions,
                 jiraResolution.HasBreakingChanges,
                 jiraResolution.HasDependencyIssues));
-            progress?.CommitProcessed?.Invoke(repository.Value);
+            progress?.CommitProcessed?.Invoke(sourceRepository.Value);
         }
 
-        return RepositoryTagLookup.Success(repositoryForBitbucketCalls, enrichedTags);
+        return enrichedTags;
+    }
+
+    private static async Task<JiraTaskResolution> ResolveJiraTaskResolutionAsync(
+        HttpClient httpClient,
+        IHttpRetryExecutor httpRetryExecutor,
+        IResponseSerializer responseSerializer,
+        IJiraTaskResolver jiraTaskResolver,
+        BitbucketOptions options,
+        RepositoryName repositoryForBitbucketCalls,
+        string[] projectNames,
+        string? commitHash,
+        Dictionary<string, JiraTaskResolution> jiraCacheByCommit,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(commitHash))
+        {
+            return JiraTaskResolution.NotAvailable("N/A");
+        }
+
+        if (jiraCacheByCommit.TryGetValue(commitHash, out var jiraResolution))
+        {
+            return jiraResolution;
+        }
+
+        var message = await TryGetCommitMessageAsync(
+            httpClient,
+            httpRetryExecutor,
+            responseSerializer,
+            options,
+            repositoryForBitbucketCalls,
+            commitHash,
+            cancellationToken).ConfigureAwait(false);
+
+        jiraResolution = await jiraTaskResolver.ResolveFromCommitMessageAsync(
+                message,
+                projectNames,
+                cancellationToken)
+            .ConfigureAwait(false);
+        jiraCacheByCommit[commitHash] = jiraResolution;
+
+        return jiraResolution;
     }
 
     private static async Task<RepositoryTagReferenceLoadResult> LoadRepositoryTagReferencesAsync(
         HttpClient httpClient,
+        IHttpRetryExecutor httpRetryExecutor,
+        IResponseSerializer responseSerializer,
         BitbucketOptions options,
         RepositoryName repository,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(httpRetryExecutor);
+        ArgumentNullException.ThrowIfNull(responseSerializer);
+
         var tags = new List<RepositoryTagReference>();
 
         Uri? next = new(
@@ -220,7 +318,7 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
 
         while (next is not null)
         {
-            using var response = await GetWithRetryAsync(
+            using var response = await httpRetryExecutor.GetAsync(
                 httpClient,
                 next,
                 options.RetryCount,
@@ -236,12 +334,15 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
                 var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 var details = string.IsNullOrWhiteSpace(body)
                     ? $"{(int)response.StatusCode} {response.ReasonPhrase}"
-                    : $"{(int)response.StatusCode} {response.ReasonPhrase}: {TrimText(body, 180)}";
+                    : $"{(int)response.StatusCode} {response.ReasonPhrase}: {StringHelpers.TrimText(body, 180)}";
 
                 return RepositoryTagReferenceLoadResult.ApiError(details);
             }
 
-            var page = await ReadTagPageAsync(response, cancellationToken).ConfigureAwait(false);
+            var page = await ReadTagPageAsync(
+                response,
+                responseSerializer,
+                cancellationToken).ConfigureAwait(false);
             tags.AddRange(page.Values);
             next = page.Next;
         }
@@ -269,16 +370,21 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
 
     private static async Task<string?> TryGetCommitMessageAsync(
         HttpClient httpClient,
+        IHttpRetryExecutor httpRetryExecutor,
+        IResponseSerializer responseSerializer,
         BitbucketOptions options,
         RepositoryName repository,
         string commitHash,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(httpRetryExecutor);
+        ArgumentNullException.ThrowIfNull(responseSerializer);
+
         var commitUrl = new Uri(
             $"repositories/{Uri.EscapeDataString(options.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash)}",
             UriKind.Relative);
 
-        using var response = await GetWithRetryAsync(
+        using var response = await httpRetryExecutor.GetAsync(
             httpClient,
             commitUrl,
             options.RetryCount,
@@ -289,256 +395,20 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
             return null;
         }
 
-        var commit = await ReadCommitInfoAsync(response, cancellationToken).ConfigureAwait(false);
+        var commit = await ReadCommitInfoAsync(
+            response,
+            responseSerializer,
+            cancellationToken).ConfigureAwait(false);
         return commit?.Message;
-    }
-
-    private static string ExtractJiraTask(string? commitMessage, string[] projectNames)
-    {
-        if (string.IsNullOrWhiteSpace(commitMessage) || projectNames.Length == 0)
-        {
-            return "N/A";
-        }
-
-        var projectNamePattern = string.Join(
-            "|",
-            projectNames.Select(static projectName => Regex.Escape(projectName)));
-        var pattern = $@"\b(?<project>{projectNamePattern})-\d+\b";
-        var matches = Regex.Matches(commitMessage, pattern, RegexOptions.IgnoreCase);
-
-        if (matches.Count == 0)
-        {
-            return "N/A";
-        }
-
-        var selectedProjectName = matches[0].Groups["project"].Value;
-
-        var jiraTasks = matches
-            .Where(match => string.Equals(
-                match.Groups["project"].Value,
-                selectedProjectName,
-                StringComparison.OrdinalIgnoreCase))
-            .Select(match => match.Value.ToUpperInvariant())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        return string.Join(", ", jiraTasks);
-    }
-
-    private static async Task<JiraTaskResolution> ResolveJiraTaskResolutionAsync(
-        HttpClient jiraHttpClient,
-        JiraOptions jiraOptions,
-        string jiraTask,
-        string[] projectNames,
-        ConcurrentDictionary<string, JiraTaskInfo> jiraTaskInfoCacheByTask,
-        SemaphoreSlim jiraSemaphore,
-        CancellationToken cancellationToken)
-    {
-        var jiraTasks = SplitJiraTasks(jiraTask);
-        if (jiraTasks.Length == 0)
-        {
-            return new JiraTaskResolution("N/A", jiraTask, "N/A", [], false, false, false);
-        }
-
-        var jiraStatuses = new List<string>(jiraTasks.Length);
-        var jiraTitles = new List<string>(jiraTasks.Length);
-        var taskAlertDetails = new List<JiraTaskAlertDetails>(jiraTasks.Length);
-        var hasRequiredActions = false;
-        var hasBreakingChanges = false;
-        var hasDependencyIssues = false;
-        foreach (var task in jiraTasks)
-        {
-            if (!jiraTaskInfoCacheByTask.TryGetValue(task, out var jiraTaskInfo))
-            {
-                await jiraSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    jiraTaskInfo = await TryGetJiraTaskInfoAsync(
-                        jiraHttpClient,
-                        jiraOptions,
-                        task,
-                        cancellationToken).ConfigureAwait(false);
-                }
-                finally
-                {
-                    _ = jiraSemaphore.Release();
-                }
-
-                if (!IsTransientJiraStatus(jiraTaskInfo.Status))
-                {
-                    _ = jiraTaskInfoCacheByTask.TryAdd(task, jiraTaskInfo);
-                }
-            }
-
-            jiraStatuses.Add(jiraTaskInfo.Status);
-            jiraTitles.Add(jiraTaskInfo.Title);
-            var requiredActionsDetails = jiraOptions.CheckReleaseAlerts
-                ? jiraTaskInfo.RequiredActionsDetails
-                : null;
-            var breakingChangesDetails = jiraOptions.CheckReleaseAlerts
-                ? jiraTaskInfo.BreakingChangesDetails
-                : null;
-            taskAlertDetails.Add(new JiraTaskAlertDetails(
-                new JiraTaskReference(task),
-                new JiraTitleReference(jiraTaskInfo.Title),
-                new JiraStatusReference(jiraTaskInfo.Status),
-                requiredActionsDetails,
-                breakingChangesDetails));
-            if (jiraOptions.CheckReleaseAlerts)
-            {
-                hasRequiredActions |= jiraTaskInfo.HasRequiredActions;
-                hasBreakingChanges |= jiraTaskInfo.HasBreakingChanges;
-                hasDependencyIssues |= HasDependencyIssue(
-                    task,
-                    jiraTaskInfo.RequiredActionsDetails,
-                    jiraTaskInfo.BreakingChangesDetails,
-                    projectNames);
-            }
-        }
-
-        return new JiraTaskResolution(
-            string.Join(", ", jiraStatuses),
-            string.Join(", ", jiraTasks),
-            string.Join(", ", jiraTitles),
-            taskAlertDetails,
-            hasRequiredActions,
-            hasBreakingChanges,
-            hasDependencyIssues);
-    }
-
-    private static string[] SplitJiraTasks(string jiraTask)
-    {
-        if (string.IsNullOrWhiteSpace(jiraTask) || string.Equals(jiraTask, "N/A", StringComparison.OrdinalIgnoreCase))
-        {
-            return [];
-        }
-
-        return
-        [
-            .. jiraTask
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(static x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-        ];
-    }
-
-    private static async Task<JiraTaskInfo> TryGetJiraTaskInfoAsync(
-        HttpClient jiraHttpClient,
-        JiraOptions jiraOptions,
-        string jiraTask,
-        CancellationToken cancellationToken)
-    {
-        var issueUrl = new Uri($"rest/api/3/issue/{Uri.EscapeDataString(jiraTask)}?expand=names", UriKind.Relative);
-
-        using var response = await GetWithRetryAsync(
-            jiraHttpClient,
-            issueUrl,
-            jiraOptions.RetryCount,
-            cancellationToken).ConfigureAwait(false);
-
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            var statusFromSearch = await TryGetJiraStatusBySearchAsync(
-                jiraHttpClient,
-                jiraOptions,
-                jiraTask,
-                cancellationToken).ConfigureAwait(false);
-
-            return new JiraTaskInfo(statusFromSearch ?? "Not found", "N/A", null, null);
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return new JiraTaskInfo($"HTTP {(int)response.StatusCode}", "N/A", null, null);
-        }
-
-        var issue = await ReadJiraIssueInfoAsync(response, jiraOptions, cancellationToken).ConfigureAwait(false);
-        var status = issue?.StatusName?.Value ?? "N/A";
-        var title = issue?.Title ?? "N/A";
-        var requiredActionsDetails = issue?.RequiredActionsDetails;
-        var breakingChangesDetails = issue?.BreakingChangesDetails;
-
-        return new JiraTaskInfo(status, title, requiredActionsDetails, breakingChangesDetails);
-    }
-
-    private static async Task<string?> TryGetJiraStatusBySearchAsync(
-        HttpClient jiraHttpClient,
-        JiraOptions jiraOptions,
-        string jiraTask,
-        CancellationToken cancellationToken)
-    {
-        var jql = $"key = \"{jiraTask}\"";
-
-        var api3SearchUrl = new Uri(
-            $"rest/api/3/search/jql?jql={Uri.EscapeDataString(jql)}&fields=status&maxResults=1",
-            UriKind.Relative);
-
-        var api3Result = await TryGetJiraStatusBySearchUrlAsync(
-            jiraHttpClient,
-            jiraOptions,
-            api3SearchUrl,
-            cancellationToken).ConfigureAwait(false);
-        if (api3Result is not null)
-        {
-            return api3Result;
-        }
-
-        // Some Jira instances expose only v2 search endpoint.
-        var api2SearchUrl = new Uri(
-            $"rest/api/2/search?jql={Uri.EscapeDataString(jql)}&fields=status&maxResults=1",
-            UriKind.Relative);
-
-        return await TryGetJiraStatusBySearchUrlAsync(
-            jiraHttpClient,
-            jiraOptions,
-            api2SearchUrl,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task<string?> TryGetJiraStatusBySearchUrlAsync(
-        HttpClient jiraHttpClient,
-        JiraOptions jiraOptions,
-        Uri searchUrl,
-        CancellationToken cancellationToken)
-    {
-        using var response = await GetWithRetryAsync(
-            jiraHttpClient,
-            searchUrl,
-            jiraOptions.RetryCount,
-            cancellationToken).ConfigureAwait(false);
-
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return $"HTTP {(int)response.StatusCode}";
-        }
-
-        var searchResult = await ReadJiraSearchResultAsync(response, cancellationToken).ConfigureAwait(false);
-
-        var status = searchResult is not null && searchResult.Issues.Count > 0
-            ? searchResult.Issues[0].StatusName
-            : null;
-
-        if (status is { } jiraStatus)
-        {
-            return jiraStatus.Value;
-        }
-
-        return "Not found";
     }
 
     private static async Task<RepositoryTagPage> ReadTagPageAsync(
         HttpResponseMessage response,
+        IResponseSerializer responseSerializer,
         CancellationToken cancellationToken)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var pageDto = await JsonSerializer.DeserializeAsync<TagPageDto>(
-            stream,
-            _jsonSerializerOptions,
+        var pageDto = await responseSerializer.SerializeAsync<TagPageDto>(
+            response,
             cancellationToken).ConfigureAwait(false);
 
         return pageDto is null ? RepositoryTagPage.Empty : pageDto.ToDomain();
@@ -546,231 +416,19 @@ public sealed class BitbucketTagClient : IBitbucketTagClient
 
     private static async Task<CommitInfo?> ReadCommitInfoAsync(
         HttpResponseMessage response,
+        IResponseSerializer responseSerializer,
         CancellationToken cancellationToken)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var commitDto = await JsonSerializer.DeserializeAsync<CommitDto>(
-            stream,
-            _jsonSerializerOptions,
+        var commitDto = await responseSerializer.SerializeAsync<CommitDto>(
+            response,
             cancellationToken).ConfigureAwait(false);
 
         return commitDto?.ToDomain();
     }
 
-    private static async Task<JiraIssueInfo?> ReadJiraIssueInfoAsync(
-        HttpResponseMessage response,
-        JiraOptions jiraOptions,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(jiraOptions);
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var issueDto = await JsonSerializer.DeserializeAsync<JiraIssueStatusResponseDto>(
-            stream,
-            _jsonSerializerOptions,
-            cancellationToken).ConfigureAwait(false);
-
-        return issueDto?.ToDomain(
-            jiraOptions.RequiredActionsFieldName,
-            jiraOptions.BreakingChangesFieldName);
-    }
-
-    private static async Task<JiraSearchResult?> ReadJiraSearchResultAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var searchDto = await JsonSerializer.DeserializeAsync<JiraSearchResponseDto>(
-            stream,
-            _jsonSerializerOptions,
-            cancellationToken).ConfigureAwait(false);
-
-        return searchDto?.ToDomain();
-    }
-
-    private static bool IsTransientJiraStatus(string jiraStatus)
-    {
-        return jiraStatus is "HTTP 408"
-            or "HTTP 429"
-            or "HTTP 500"
-            or "HTTP 502"
-            or "HTTP 503"
-            or "HTTP 504";
-    }
-
-    private static async Task<HttpResponseMessage> GetWithRetryAsync(
-        HttpClient httpClient,
-        Uri url,
-        int retryCount,
-        CancellationToken cancellationToken)
-    {
-        var attempt = 0;
-
-        while (true)
-        {
-            try
-            {
-                var response = await httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
-
-                if (attempt < retryCount && IsTransientStatusCode(response.StatusCode))
-                {
-                    var delay = GetRetryDelay(attempt + 1, response.Headers.RetryAfter);
-                    response.Dispose();
-                    attempt++;
-                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
-                    continue;
-                }
-
-                return response;
-            }
-            catch (HttpRequestException) when (attempt < retryCount)
-            {
-                attempt++;
-                await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
-            }
-        }
-    }
-
-    private static bool IsTransientStatusCode(HttpStatusCode statusCode)
-    {
-        return statusCode is HttpStatusCode.RequestTimeout
-            or HttpStatusCode.TooManyRequests
-            or HttpStatusCode.InternalServerError
-            or HttpStatusCode.BadGateway
-            or HttpStatusCode.ServiceUnavailable
-            or HttpStatusCode.GatewayTimeout;
-    }
-
-    private static TimeSpan GetRetryDelay(int attempt, RetryConditionHeaderValue? retryAfter = null)
-    {
-        if (retryAfter?.Delta is { } delta && delta > TimeSpan.Zero)
-        {
-            return CapRetryDelay(delta);
-        }
-
-        if (retryAfter?.Date is { } date)
-        {
-            var remaining = date - DateTimeOffset.UtcNow;
-            if (remaining > TimeSpan.Zero)
-            {
-                return CapRetryDelay(remaining);
-            }
-        }
-
-        var milliseconds = Math.Min(10000, 300 * Math.Pow(2, attempt - 1));
-        milliseconds += RandomNumberGenerator.GetInt32(100, 400);
-        return TimeSpan.FromMilliseconds(milliseconds);
-    }
-
-    private static TimeSpan CapRetryDelay(TimeSpan value)
-    {
-        var max = TimeSpan.FromSeconds(30);
-        return value > max ? max : value;
-    }
-
-    private static string TrimText(string value, int maxLength)
-    {
-        var oneLine = value.ReplaceLineEndings(" ").Trim();
-        if (oneLine.Length <= maxLength)
-        {
-            return oneLine;
-        }
-
-        return oneLine[..maxLength] + "...";
-    }
-
-    private static bool HasDependencyIssue(
-        string currentTask,
-        string? requiredActionsDetails,
-        string? breakingChangesDetails,
-        string[] projectNames)
-    {
-        if (projectNames.Length == 0)
-        {
-            return false;
-        }
-
-        var details = string.Join(
-            Environment.NewLine,
-            new[] { requiredActionsDetails, breakingChangesDetails }
-                .Where(static text => !string.IsNullOrWhiteSpace(text)));
-
-        if (string.IsNullOrWhiteSpace(details))
-        {
-            return false;
-        }
-
-        var projectNamePattern = string.Join(
-            "|",
-            projectNames.Select(static projectName => Regex.Escape(projectName)));
-        if (string.IsNullOrWhiteSpace(projectNamePattern))
-        {
-            return false;
-        }
-
-        var matches = Regex.Matches(details, $@"\b(?:{projectNamePattern})-\d+\b", RegexOptions.IgnoreCase);
-        if (matches.Count == 0)
-        {
-            return false;
-        }
-
-        foreach (Match match in matches)
-        {
-            var taskReference = match.Value.ToUpperInvariant();
-            if (!string.Equals(taskReference, currentTask, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private readonly record struct JiraTaskResolution(
-        string Statuses,
-        string Tasks,
-        string Titles,
-        IReadOnlyList<JiraTaskAlertDetails> TaskAlertDetails,
-        bool HasRequiredActions,
-        bool HasBreakingChanges,
-        bool HasDependencyIssues);
-
-    private readonly record struct JiraTaskInfo(
-        string Status,
-        string Title,
-        string? RequiredActionsDetails,
-        string? BreakingChangesDetails)
-    {
-        public bool HasRequiredActions => !string.IsNullOrWhiteSpace(RequiredActionsDetails);
-
-        public bool HasBreakingChanges => !string.IsNullOrWhiteSpace(BreakingChangesDetails);
-    }
-
-    private readonly record struct RepositoryTagReferenceLoadResult(
-        bool IsRepositoryMissing,
-        string? Error,
-        RepositoryTagReference[] Tags)
-    {
-        public static RepositoryTagReferenceLoadResult RepoNotFound() => new(true, null, []);
-
-        public static RepositoryTagReferenceLoadResult ApiError(string error)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(error);
-            return new RepositoryTagReferenceLoadResult(false, error, []);
-        }
-
-        public static RepositoryTagReferenceLoadResult Success(RepositoryTagReference[] tags)
-        {
-            ArgumentNullException.ThrowIfNull(tags);
-            return new RepositoryTagReferenceLoadResult(false, null, tags);
-        }
-    }
-
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IJiraTaskResolver _jiraTaskResolver;
+    private readonly IHttpRetryExecutor _httpRetryExecutor;
+    private readonly IResponseSerializer _responseSerializer;
     private readonly BitbucketOptions _bitbucketOptions;
-    private readonly JiraOptions _jiraOptions;
-    private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
 }
