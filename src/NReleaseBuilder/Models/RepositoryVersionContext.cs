@@ -1,4 +1,4 @@
-using NReleaseBuilder.Services;
+using NReleaseBuilder.Bitbucket;
 
 using NuGet.Versioning;
 

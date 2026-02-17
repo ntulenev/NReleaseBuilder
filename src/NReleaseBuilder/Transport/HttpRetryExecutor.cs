@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 
 using NReleaseBuilder.Abstractions;
 
-namespace NReleaseBuilder.Services;
+namespace NReleaseBuilder.Transport;
 
 /// <summary>
 /// Default HTTP retry executor with exponential backoff and jitter.

@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Transport;
+namespace NReleaseBuilder.Transport.Models;
 
 /// <summary>
 /// Bitbucket commit DTO.

@@ -6,7 +6,7 @@ using NReleaseBuilder.Models;
 
 using Microsoft.Extensions.Options;
 
-namespace NReleaseBuilder.Services;
+namespace NReleaseBuilder.Csv;
 
 /// <summary>
 /// CSV reader for extracting component, repository and version information.

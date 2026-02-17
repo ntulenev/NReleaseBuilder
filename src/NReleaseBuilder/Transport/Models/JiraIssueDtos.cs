@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace NReleaseBuilder.Transport;
+namespace NReleaseBuilder.Transport.Models;
 
 /// <summary>
 /// Jira issue response DTO.

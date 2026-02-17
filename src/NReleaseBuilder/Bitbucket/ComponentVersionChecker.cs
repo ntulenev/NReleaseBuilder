@@ -1,7 +1,7 @@
 using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Models;
 
-namespace NReleaseBuilder.Services;
+namespace NReleaseBuilder.Bitbucket;
 
 /// <summary>
 /// Builds component check rows by comparing current and available versions.

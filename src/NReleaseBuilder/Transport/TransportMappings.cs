@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using NReleaseBuilder.Models;
+using NReleaseBuilder.Transport.Models;
 
 namespace NReleaseBuilder.Transport;
 

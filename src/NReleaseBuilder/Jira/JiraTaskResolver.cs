@@ -7,8 +7,9 @@ using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
 using NReleaseBuilder.Transport;
+using NReleaseBuilder.Transport.Models;
 
-namespace NReleaseBuilder.Services;
+namespace NReleaseBuilder.Jira;
 
 /// <summary>
 /// Jira task resolver that extracts task keys from commit messages and loads Jira metadata.

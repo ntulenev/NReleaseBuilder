@@ -5,12 +5,13 @@ using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Helpers;
 using NReleaseBuilder.Models;
 using NReleaseBuilder.Transport;
+using NReleaseBuilder.Transport.Models;
 
 using Microsoft.Extensions.Options;
 
 using NuGet.Versioning;
 
-namespace NReleaseBuilder.Services;
+namespace NReleaseBuilder.Bitbucket;
 
 /// <summary>
 /// Bitbucket data loader for repository tags and Jira-enriched tag metadata.

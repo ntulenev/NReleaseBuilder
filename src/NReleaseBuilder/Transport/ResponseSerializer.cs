@@ -2,7 +2,7 @@ using System.Text.Json;
 
 using NReleaseBuilder.Abstractions;
 
-namespace NReleaseBuilder.Services;
+namespace NReleaseBuilder.Transport;
 
 /// <summary>
 /// Default JSON response deserializer.

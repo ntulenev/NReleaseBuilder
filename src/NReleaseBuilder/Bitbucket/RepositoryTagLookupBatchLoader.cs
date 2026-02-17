@@ -5,7 +5,7 @@ using NReleaseBuilder.Models;
 
 using NuGet.Versioning;
 
-namespace NReleaseBuilder.Services;
+namespace NReleaseBuilder.Bitbucket;
 
 /// <summary>
 /// Batched repository tag lookup loader with progress reporting.

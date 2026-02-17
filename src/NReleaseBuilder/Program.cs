@@ -3,9 +3,12 @@ using System.Text;
 
 using NReleaseBuilder.Abstractions;
 using NReleaseBuilder.Application;
+using NReleaseBuilder.Bitbucket;
 using NReleaseBuilder.Configuration;
+using NReleaseBuilder.Csv;
+using NReleaseBuilder.Jira;
 using NReleaseBuilder.Presentation;
-using NReleaseBuilder.Services;
+using NReleaseBuilder.Transport;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
