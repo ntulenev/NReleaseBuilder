@@ -107,6 +107,8 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
                 });
             })
             .GeneratePdf(outputPath);
+
+        Console.WriteLine($"PDF report saved to: {outputPath}");
     }
 
     private static void ComposePdfEmptyStateSection(
