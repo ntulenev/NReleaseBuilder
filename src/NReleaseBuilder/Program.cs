@@ -52,7 +52,7 @@ builder.Services.AddTransient<IComponentVersionChecker, ComponentVersionChecker>
 builder.Services.AddTransient<IJiraStatusStatisticsBuilder, JiraStatusStatisticsBuilder>();
 builder.Services.AddTransient<IConsoleOutputRenderer, SpectreConsoleOutputRenderer>();
 builder.Services.AddTransient<IPdfReportRenderer, QuestPdfReportRenderer>();
-builder.Services.AddTransient<IConsoleRenderer, GeneralFacadeRenderer>();
+builder.Services.AddTransient<IRenderer, GeneralFacadeRenderer>();
 builder.Services.AddTransient<IVersionCheckApplication, VersionCheckApplication>();
 
 using var host = builder.Build();

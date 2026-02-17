@@ -16,10 +16,10 @@ public sealed class RepositoryTagLookupBatchLoader : IRepositoryTagLookupBatchLo
     /// Initializes a new instance of the <see cref="RepositoryTagLookupBatchLoader"/> class.
     /// </summary>
     /// <param name="bitbucketTagClient">Bitbucket tag client.</param>
-    /// <param name="renderer">Console renderer.</param>
+    /// <param name="renderer">Application renderer.</param>
     public RepositoryTagLookupBatchLoader(
         IBitbucketTagClient bitbucketTagClient,
-        IConsoleRenderer renderer)
+        IRenderer renderer)
     {
         ArgumentNullException.ThrowIfNull(bitbucketTagClient);
         ArgumentNullException.ThrowIfNull(renderer);
@@ -104,5 +104,5 @@ public sealed class RepositoryTagLookupBatchLoader : IRepositoryTagLookupBatchLo
 
     private const int BITBUCKET_REPOSITORY_BATCH_SIZE = 10;
     private readonly IBitbucketTagClient _bitbucketTagClient;
-    private readonly IConsoleRenderer _renderer;
+    private readonly IRenderer _renderer;
 }

@@ -3,9 +3,9 @@ using NReleaseBuilder.Models;
 namespace NReleaseBuilder.Abstractions;
 
 /// <summary>
-/// Console rendering abstraction for application output.
+/// Rendering abstraction for application output.
 /// </summary>
-public interface IConsoleRenderer
+public interface IRenderer
 {
     /// <summary>
     /// Renders the initial run header.

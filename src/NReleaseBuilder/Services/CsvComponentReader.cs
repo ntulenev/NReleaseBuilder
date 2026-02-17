@@ -17,10 +17,10 @@ public sealed class CsvComponentReader : ICsvComponentReader
     /// Initializes a new instance of the <see cref="CsvComponentReader"/> class.
     /// </summary>
     /// <param name="options">Application settings options.</param>
-    /// <param name="renderer">Console renderer.</param>
+    /// <param name="renderer">Application renderer.</param>
     public CsvComponentReader(
         IOptions<AppSettings> options,
-        IConsoleRenderer renderer)
+        IRenderer renderer)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(renderer);
@@ -186,5 +186,5 @@ public sealed class CsvComponentReader : ICsvComponentReader
 
     private readonly string _csvFilePath;
     private readonly HashSet<string> _componentNamesFilter;
-    private readonly IConsoleRenderer _renderer;
+    private readonly IRenderer _renderer;
 }

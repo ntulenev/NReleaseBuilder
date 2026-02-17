@@ -9,7 +9,7 @@ namespace NReleaseBuilder.Presentation;
 /// <summary>
 /// Facade renderer that orchestrates console and PDF rendering.
 /// </summary>
-public sealed class GeneralFacadeRenderer : IConsoleRenderer
+public sealed class GeneralFacadeRenderer : IRenderer
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="GeneralFacadeRenderer"/> class.
