@@ -15,6 +15,12 @@ public sealed class AppSettings
     public required string CsvFilePath { get; init; }
 
     /// <summary>
+    /// Optional allow-list of component names loaded from CSV.
+    /// When empty, all components are included.
+    /// </summary>
+    public IReadOnlyList<string> CsvComponentNamesFilter { get; init; } = [];
+
+    /// <summary>
     /// Bitbucket API options.
     /// </summary>
     [Required]

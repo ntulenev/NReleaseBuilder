@@ -30,6 +30,7 @@ public sealed class CsvComponentReader : ICsvComponentReader
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.CsvFilePath);
 
         _csvFilePath = settings.CsvFilePath;
+        _componentNamesFilter = BuildComponentNamesFilter(settings.CsvComponentNamesFilter);
         _renderer = renderer;
     }
 
@@ -71,6 +72,11 @@ public sealed class CsvComponentReader : ICsvComponentReader
                 var image = fields[imageIndex]?.Trim();
 
                 if (string.IsNullOrWhiteSpace(component) || string.IsNullOrWhiteSpace(image))
+                {
+                    continue;
+                }
+
+                if (!IsComponentIncluded(component))
                 {
                     continue;
                 }
@@ -148,6 +154,30 @@ public sealed class CsvComponentReader : ICsvComponentReader
         return (imageWithoutDigest[(lastSlashIndex + 1)..], string.Empty);
     }
 
+    private bool IsComponentIncluded(string component)
+        => _componentNamesFilter.Count == 0 || _componentNamesFilter.Contains(component);
+
+    private static HashSet<string> BuildComponentNamesFilter(IReadOnlyList<string>? componentNamesFilter)
+    {
+        if (componentNamesFilter is null || componentNamesFilter.Count == 0)
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var componentName in componentNamesFilter)
+        {
+            if (string.IsNullOrWhiteSpace(componentName))
+            {
+                continue;
+            }
+
+            _ = result.Add(componentName.Trim());
+        }
+
+        return result;
+    }
+
     private void PrintCsvParsingError(Exception exception)
     {
         _renderer.PrintError(
@@ -155,5 +185,6 @@ public sealed class CsvComponentReader : ICsvComponentReader
     }
 
     private readonly string _csvFilePath;
+    private readonly HashSet<string> _componentNamesFilter;
     private readonly IConsoleRenderer _renderer;
 }

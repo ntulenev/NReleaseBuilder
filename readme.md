@@ -25,6 +25,7 @@ Example structure:
 ```json
 {
   "CsvFilePath": "C:\\path\\to\\components.csv",
+  "CsvComponentNamesFilter": [ "demo-engine", "sample-worker" ],
   "Bitbucket": {
     "BaseUrl": "https://api.bitbucket.org/2.0",
     "Workspace": "your-workspace",
@@ -51,6 +52,9 @@ Example structure:
 Notes:
 
 - `Bitbucket.ProjectNames` defines Jira project keys to detect in commit messages (for example `AAA-123`).
+- `CsvComponentNamesFilter` is optional:
+  - empty: include all components from CSV
+  - non-empty: include only listed component names (case-insensitive)
 - `Jira.AllowedTaskStatuses` is optional:
   - empty: show all rows
   - non-empty: keep only rows where all detected Jira statuses are in the allow-list

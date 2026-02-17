@@ -17,6 +17,7 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         var errors = new List<string>();
 
         ValidateCsvPath(options.CsvFilePath, errors);
+        ValidateCsvComponentNamesFilter(options.CsvComponentNamesFilter, errors);
         ValidateBitbucket(options.Bitbucket, errors);
         ValidateJira(options.Jira, errors);
         ValidatePdf(options.Pdf, errors);
@@ -37,6 +38,20 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         if (!File.Exists(csvFilePath))
         {
             errors.Add($"CSV file not found: {csvFilePath}");
+        }
+    }
+
+    private static void ValidateCsvComponentNamesFilter(IReadOnlyList<string>? componentNamesFilter, List<string> errors)
+    {
+        if (componentNamesFilter is null)
+        {
+            errors.Add("CsvComponentNamesFilter must not be null.");
+            return;
+        }
+
+        if (componentNamesFilter.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add("CsvComponentNamesFilter must not contain empty values.");
         }
     }
 
