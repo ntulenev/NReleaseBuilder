@@ -182,12 +182,15 @@ public class VersionCheckApplicationTests
         var csvReadCount = 0;
         var renderHeaderCount = 0;
         var repositoryCheckCountCalls = 0;
-        var repositoryCount = 0;
         var loaderCallCount = 0;
         IReadOnlyList<RepositoryName>? capturedRepositories = null;
         IReadOnlyDictionary<RepositoryName, NuGetVersion>? capturedMinVersions = null;
         var capturedToken = CancellationToken.None;
         using var cts = new CancellationTokenSource();
+        var expectedRepositoryApi = new RepositoryName("repo-api");
+        var expectedRepositoryGateway = new RepositoryName("repo-gateway");
+        var expectedApiMinVersion = NuGetVersion.Parse("0.9.0");
+        var expectedGatewayMinVersion = NuGetVersion.Parse("2.0.0");
 
         var csvReaderMock = new Mock<ICsvComponentReader>(MockBehavior.Strict);
         csvReaderMock
@@ -198,9 +201,17 @@ public class VersionCheckApplicationTests
         var repositoryLoaderMock = new Mock<IRepositoryTagLookupBatchLoader>(MockBehavior.Strict);
         repositoryLoaderMock
             .Setup(x => x.LoadAsync(
-                It.IsAny<IReadOnlyList<RepositoryName>>(),
-                It.IsAny<IReadOnlyDictionary<RepositoryName, NuGetVersion>>(),
-                It.IsAny<CancellationToken>()))
+                It.Is<IReadOnlyList<RepositoryName>>(repositories =>
+                    repositories.Count == 2
+                    && repositories[0] == expectedRepositoryApi
+                    && repositories[1] == expectedRepositoryGateway),
+                It.Is<IReadOnlyDictionary<RepositoryName, NuGetVersion>>(minVersions =>
+                    minVersions.Count == 2
+                    && minVersions.ContainsKey(expectedRepositoryApi)
+                    && minVersions[expectedRepositoryApi] == expectedApiMinVersion
+                    && minVersions.ContainsKey(expectedRepositoryGateway)
+                    && minVersions[expectedRepositoryGateway] == expectedGatewayMinVersion),
+                It.Is<CancellationToken>(token => token == cts.Token)))
             .Callback<IReadOnlyList<RepositoryName>, IReadOnlyDictionary<RepositoryName, NuGetVersion>, CancellationToken>(
                 (repositories, minVersions, token) =>
                 {
@@ -217,12 +228,8 @@ public class VersionCheckApplicationTests
             .Setup(x => x.RenderHeader())
             .Callback(() => renderHeaderCount++);
         rendererMock
-            .Setup(x => x.PrintRepositoryCheckCount(It.IsAny<int>()))
-            .Callback<int>(count =>
-            {
-                repositoryCheckCountCalls++;
-                repositoryCount = count;
-            });
+            .Setup(x => x.PrintRepositoryCheckCount(It.Is<int>(count => count == 2)))
+            .Callback<int>(count => repositoryCheckCountCalls++);
 
         var sut = new VersionCheckApplication(
             csvReaderMock.Object,
@@ -238,14 +245,13 @@ public class VersionCheckApplicationTests
         csvReadCount.Should().Be(1);
         renderHeaderCount.Should().Be(1);
         repositoryCheckCountCalls.Should().Be(1);
-        repositoryCount.Should().Be(2);
         loaderCallCount.Should().Be(1);
         capturedRepositories.Should().NotBeNull();
-        capturedRepositories.Should().Equal(new RepositoryName("repo-api"), new RepositoryName("repo-gateway"));
+        capturedRepositories.Should().Equal(expectedRepositoryApi, expectedRepositoryGateway);
         var minVersions = capturedMinVersions ?? throw new InvalidOperationException("Expected min versions to be captured.");
         minVersions.Should().HaveCount(2);
-        minVersions[new RepositoryName("repo-api")].Should().Be(NuGetVersion.Parse("0.9.0"));
-        minVersions[new RepositoryName("repo-gateway")].Should().Be(NuGetVersion.Parse("2.0.0"));
+        minVersions[expectedRepositoryApi].Should().Be(expectedApiMinVersion);
+        minVersions[expectedRepositoryGateway].Should().Be(expectedGatewayMinVersion);
         capturedToken.Should().Be(cts.Token);
     }
 
@@ -281,7 +287,6 @@ public class VersionCheckApplicationTests
         var csvReadCount = 0;
         var renderHeaderCount = 0;
         var repositoryCheckCountCalls = 0;
-        var repositoryCount = 0;
         var loaderCallCount = 0;
         IReadOnlyList<RepositoryName>? capturedRepositories = null;
         IReadOnlyDictionary<RepositoryName, NuGetVersion>? capturedMinVersions = null;
@@ -292,6 +297,10 @@ public class VersionCheckApplicationTests
         var renderResultsCount = 0;
         IReadOnlyList<ComponentCheckRow>? capturedRowsForRenderer = null;
         using var cts = new CancellationTokenSource();
+        var expectedRepositoryApi = new RepositoryName("repo-api");
+        var expectedRepositoryGateway = new RepositoryName("repo-gateway");
+        var expectedApiMinVersion = NuGetVersion.Parse("1.2.5");
+        var expectedGatewayMinVersion = NuGetVersion.Parse("2.3.0");
 
         var csvReaderMock = new Mock<ICsvComponentReader>(MockBehavior.Strict);
         csvReaderMock
@@ -302,9 +311,17 @@ public class VersionCheckApplicationTests
         var repositoryLoaderMock = new Mock<IRepositoryTagLookupBatchLoader>(MockBehavior.Strict);
         repositoryLoaderMock
             .Setup(x => x.LoadAsync(
-                It.IsAny<IReadOnlyList<RepositoryName>>(),
-                It.IsAny<IReadOnlyDictionary<RepositoryName, NuGetVersion>>(),
-                It.IsAny<CancellationToken>()))
+                It.Is<IReadOnlyList<RepositoryName>>(repositories =>
+                    repositories.Count == 2
+                    && repositories[0] == expectedRepositoryApi
+                    && repositories[1] == expectedRepositoryGateway),
+                It.Is<IReadOnlyDictionary<RepositoryName, NuGetVersion>>(minVersions =>
+                    minVersions.Count == 2
+                    && minVersions.ContainsKey(expectedRepositoryApi)
+                    && minVersions[expectedRepositoryApi] == expectedApiMinVersion
+                    && minVersions.ContainsKey(expectedRepositoryGateway)
+                    && minVersions[expectedRepositoryGateway] == expectedGatewayMinVersion),
+                It.Is<CancellationToken>(token => token == cts.Token)))
             .Callback<IReadOnlyList<RepositoryName>, IReadOnlyDictionary<RepositoryName, NuGetVersion>, CancellationToken>(
                 (repositories, minVersions, token) =>
                 {
@@ -318,8 +335,22 @@ public class VersionCheckApplicationTests
         var versionCheckerMock = new Mock<IComponentVersionChecker>(MockBehavior.Strict);
         versionCheckerMock
             .Setup(x => x.BuildRows(
-                It.IsAny<IReadOnlyList<ComponentRow>>(),
-                It.IsAny<IReadOnlyDictionary<RepositoryName, RepositoryTagLookup>>()))
+                It.Is<IReadOnlyList<ComponentRow>>(rows =>
+                    rows.Count == componentRows.Count
+                    && rows[0].Component == componentRows[0].Component
+                    && rows[0].Repository == componentRows[0].Repository
+                    && rows[0].Version == componentRows[0].Version
+                    && rows[1].Component == componentRows[1].Component
+                    && rows[1].Repository == componentRows[1].Repository
+                    && rows[1].Version == componentRows[1].Version
+                    && rows[2].Component == componentRows[2].Component
+                    && rows[2].Repository == componentRows[2].Repository
+                    && rows[2].Version == componentRows[2].Version
+                    && rows[3].Component == componentRows[3].Component
+                    && rows[3].Repository == componentRows[3].Repository
+                    && rows[3].Version == componentRows[3].Version),
+                It.Is<IReadOnlyDictionary<RepositoryName, RepositoryTagLookup>>(lookups =>
+                    ReferenceEquals(lookups, tagLookups))))
             .Callback<IReadOnlyList<ComponentRow>, IReadOnlyDictionary<RepositoryName, RepositoryTagLookup>>(
                 (rows, lookups) =>
                 {
@@ -334,14 +365,10 @@ public class VersionCheckApplicationTests
             .Setup(x => x.RenderHeader())
             .Callback(() => renderHeaderCount++);
         rendererMock
-            .Setup(x => x.PrintRepositoryCheckCount(It.IsAny<int>()))
-            .Callback<int>(count =>
-            {
-                repositoryCheckCountCalls++;
-                repositoryCount = count;
-            });
+            .Setup(x => x.PrintRepositoryCheckCount(It.Is<int>(count => count == 2)))
+            .Callback<int>(count => repositoryCheckCountCalls++);
         rendererMock
-            .Setup(x => x.RenderResults(It.IsAny<IReadOnlyList<ComponentCheckRow>>()))
+            .Setup(x => x.RenderResults(It.Is<IReadOnlyList<ComponentCheckRow>>(rows => ReferenceEquals(rows, expectedRows))))
             .Callback<IReadOnlyList<ComponentCheckRow>>(rows =>
             {
                 renderResultsCount++;
@@ -362,20 +389,19 @@ public class VersionCheckApplicationTests
         csvReadCount.Should().Be(1);
         renderHeaderCount.Should().Be(1);
         repositoryCheckCountCalls.Should().Be(1);
-        repositoryCount.Should().Be(2);
 
         loaderCallCount.Should().Be(1);
         capturedRepositories.Should().NotBeNull();
-        capturedRepositories.Should().Equal(new RepositoryName("repo-api"), new RepositoryName("repo-gateway"));
+        capturedRepositories.Should().Equal(expectedRepositoryApi, expectedRepositoryGateway);
         var minVersions = capturedMinVersions ?? throw new InvalidOperationException("Expected min versions to be captured.");
         minVersions.Should().HaveCount(2);
-        minVersions[new RepositoryName("repo-api")].Should().Be(NuGetVersion.Parse("1.2.5"));
-        minVersions[new RepositoryName("repo-gateway")].Should().Be(NuGetVersion.Parse("2.3.0"));
+        minVersions[expectedRepositoryApi].Should().Be(expectedApiMinVersion);
+        minVersions[expectedRepositoryGateway].Should().Be(expectedGatewayMinVersion);
         capturedLoaderToken.Should().Be(cts.Token);
 
         checkerCallCount.Should().Be(1);
         capturedRowsForChecker.Should().NotBeNull();
-        capturedRowsForChecker!.Should().Equal(componentRows);
+        capturedRowsForChecker.Should().Equal(componentRows);
         capturedLookupsForChecker.Should().BeSameAs(tagLookups);
 
         renderResultsCount.Should().Be(1);
