@@ -48,6 +48,22 @@ NReleaseBuilder/
      - unique Jira tasks by status chart
    - PDF report (when `Pdf.Enabled` is `true`) with filtered results and details
 
+## Recommended Development Flow
+
+This utility is useful for projects using:
+
+- trunk-based development
+- continuous versioning
+- sequential releases
+- feature -> `master` merge flow
+
+Typical fit:
+
+- each feature is developed in a separate branch and merged directly into `master`
+- `master` is the single source of truth
+- each merge to `master` produces a new versioned artifact
+- service versions grow sequentially during active development (for example: `1.0.0`, `1.0.1`, `1.0.2`, ... `2.0.0`)
+
 ## Configuration
 
 Edit `src/NReleaseBuilder/appsettings.json`.
@@ -183,5 +199,4 @@ Only `container` and `image` are required.
 The utility console output.
 
 ![Example output](RBuilder.png)
-
 
