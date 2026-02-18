@@ -1,4 +1,6 @@
-using NReleaseBuilder.Models;
+
+
+using NReleaseBuilder.Models.Bitbucket;
 
 namespace NReleaseBuilder.Bitbucket.Internal.Models;
 

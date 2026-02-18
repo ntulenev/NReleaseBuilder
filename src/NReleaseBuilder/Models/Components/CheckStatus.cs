@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Components;
 
 /// <summary>
 /// Result status of component version check.
@@ -30,3 +30,4 @@ public enum CheckStatus
     /// </summary>
     InvalidCurrentVersion,
 }
+

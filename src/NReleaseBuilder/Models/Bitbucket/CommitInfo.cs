@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Bitbucket;
 
 /// <summary>
 /// Commit domain model with message payload.

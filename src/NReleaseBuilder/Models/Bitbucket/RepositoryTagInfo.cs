@@ -1,4 +1,7 @@
-namespace NReleaseBuilder.Models;
+
+using NReleaseBuilder.Models.Jira;
+
+namespace NReleaseBuilder.Models.Bitbucket;
 
 /// <summary>
 /// Repository tag enriched with Jira task, title, and status information.

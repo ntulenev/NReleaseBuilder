@@ -1,4 +1,6 @@
-namespace NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+
+namespace NReleaseBuilder.Models.Jira;
 
 /// <summary>
 /// Newer version row enriched with Jira task, title, and status.

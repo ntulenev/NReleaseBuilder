@@ -1,15 +1,15 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Bitbucket;
 
 /// <summary>
-/// Row details message value object.
+/// Version label value object.
 /// </summary>
-public readonly record struct RowDetails
+public readonly record struct VersionLabel
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="RowDetails"/> struct.
+    /// Initializes a new instance of the <see cref="VersionLabel"/> struct.
     /// </summary>
-    /// <param name="value">Details message text.</param>
-    public RowDetails(string value)
+    /// <param name="value">Version text.</param>
+    public VersionLabel(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
 
@@ -17,10 +17,11 @@ public readonly record struct RowDetails
     }
 
     /// <summary>
-    /// Details message text value.
+    /// Version text value.
     /// </summary>
     public string Value { get; }
 
     /// <inheritdoc />
     public override string ToString() => Value ?? string.Empty;
 }
+

@@ -1,7 +1,8 @@
 using System.Globalization;
 
 using NReleaseBuilder.Abstractions.Rendering;
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Components;
+using NReleaseBuilder.Models.Jira;
 
 using QuestPDF.Fluent;
 

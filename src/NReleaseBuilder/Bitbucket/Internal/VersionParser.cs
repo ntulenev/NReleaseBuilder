@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
 
 using NuGet.Versioning;
 

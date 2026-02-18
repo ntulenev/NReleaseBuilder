@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Components;
 
 /// <summary>
 /// Display index value object for component check rows.
@@ -24,3 +24,4 @@ public readonly record struct ComponentCheckIndex
     /// <inheritdoc />
     public override string ToString() => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
+

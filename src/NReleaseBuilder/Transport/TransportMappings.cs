@@ -1,6 +1,7 @@
 using System.Text.Json;
 
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Jira;
 using NReleaseBuilder.Transport.Models;
 
 namespace NReleaseBuilder.Transport;

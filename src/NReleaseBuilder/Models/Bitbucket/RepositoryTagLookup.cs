@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Bitbucket;
 
 /// <summary>
 /// Lookup result for repository tags.

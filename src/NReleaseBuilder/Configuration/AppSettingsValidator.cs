@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Options;
 
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+
+
 
 namespace NReleaseBuilder.Configuration;
 

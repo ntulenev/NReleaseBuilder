@@ -1,6 +1,8 @@
 using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Bitbucket.Internal;
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Components;
+using NReleaseBuilder.Models.Jira;
 
 namespace NReleaseBuilder.Bitbucket;
 

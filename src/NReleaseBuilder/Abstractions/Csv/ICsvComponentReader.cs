@@ -1,4 +1,6 @@
-using NReleaseBuilder.Models;
+
+
+using NReleaseBuilder.Models.Components;
 
 namespace NReleaseBuilder.Abstractions.Csv;
 

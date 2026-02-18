@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Bitbucket;
 
 /// <summary>
 /// Repository tag page domain model.

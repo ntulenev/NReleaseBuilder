@@ -4,7 +4,8 @@ using Microsoft.Extensions.Options;
 
 using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Components;
+using NReleaseBuilder.Models.Jira;
 
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;

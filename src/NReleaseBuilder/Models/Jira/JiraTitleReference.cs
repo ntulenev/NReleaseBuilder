@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Jira;
 
 /// <summary>
 /// Jira title reference value object that may hold one or many titles.

@@ -1,4 +1,8 @@
-namespace NReleaseBuilder.Models;
+
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Jira;
+
+namespace NReleaseBuilder.Models.Components;
 
 /// <summary>
 /// Output row for a component version check.
@@ -107,3 +111,4 @@ public readonly record struct ComponentCheckRow
         return hasAnyTaskStatus;
     }
 }
+

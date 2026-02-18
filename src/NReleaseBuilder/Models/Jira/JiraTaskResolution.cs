@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Jira;
 
 /// <summary>
 /// Resolved Jira details for one or more Jira tasks.

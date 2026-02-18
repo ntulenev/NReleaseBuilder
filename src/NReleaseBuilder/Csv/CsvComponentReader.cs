@@ -1,11 +1,12 @@
+using Microsoft.Extensions.Options;
 using Microsoft.VisualBasic.FileIO;
 
 using NReleaseBuilder.Abstractions.Csv;
 using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
-
-using Microsoft.Extensions.Options;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Components;
 
 namespace NReleaseBuilder.Csv;
 

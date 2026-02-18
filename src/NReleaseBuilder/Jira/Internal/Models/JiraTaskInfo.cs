@@ -1,6 +1,8 @@
 using System.Net;
 
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Jira;
+
+
 
 namespace NReleaseBuilder.Jira.Internal.Models;
 

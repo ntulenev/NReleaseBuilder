@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Jira;
 
 /// <summary>
 /// Jira project key value object.

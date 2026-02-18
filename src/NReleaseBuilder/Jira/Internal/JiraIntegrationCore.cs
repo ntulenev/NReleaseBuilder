@@ -6,7 +6,7 @@ using NReleaseBuilder.Abstractions.Jira;
 using NReleaseBuilder.Abstractions.Transport;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Jira.Internal.Models;
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Jira;
 using NReleaseBuilder.Transport;
 using NReleaseBuilder.Transport.Models;
 

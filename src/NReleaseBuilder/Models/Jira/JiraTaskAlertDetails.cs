@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Jira;
 
 /// <summary>
 /// Per-task Jira release alert details.
@@ -62,8 +62,5 @@ public readonly record struct JiraTaskAlertDetails
     /// </summary>
     public bool HasBreakingChanges => !string.IsNullOrWhiteSpace(BreakingChangesDetails);
 
-    private static string? Normalize(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
+    private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

@@ -6,7 +6,7 @@ using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Abstractions.Transport;
 using NReleaseBuilder.Bitbucket.Internal.Models;
 using NReleaseBuilder.Configuration;
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Transport;
 using NReleaseBuilder.Transport.Models;
 

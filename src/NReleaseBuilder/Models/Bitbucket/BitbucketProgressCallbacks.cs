@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Bitbucket;
 
 /// <summary>
 /// Progress callbacks invoked during per-repository Bitbucket loading.

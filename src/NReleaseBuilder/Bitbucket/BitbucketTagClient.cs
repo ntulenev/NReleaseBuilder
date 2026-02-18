@@ -1,8 +1,8 @@
+using Microsoft.Extensions.Options;
+
 using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Configuration;
-using NReleaseBuilder.Models;
-
-using Microsoft.Extensions.Options;
+using NReleaseBuilder.Models.Bitbucket;
 
 using NuGet.Versioning;
 

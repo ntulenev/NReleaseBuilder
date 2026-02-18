@@ -1,8 +1,9 @@
 using NReleaseBuilder.Bitbucket.Internal;
+using NReleaseBuilder.Models.Components;
 
 using NuGet.Versioning;
 
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Bitbucket;
 
 /// <summary>
 /// Repository-level context derived from component rows.

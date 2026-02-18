@@ -1,4 +1,6 @@
-using NReleaseBuilder.Models;
+
+
+using NReleaseBuilder.Models.Jira;
 
 namespace NReleaseBuilder.Jira.Internal;
 

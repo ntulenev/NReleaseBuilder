@@ -1,7 +1,8 @@
 using System.Text.RegularExpressions;
 
 using NReleaseBuilder.Abstractions.Jira;
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Jira;
 
 namespace NReleaseBuilder.Jira.Internal;
 

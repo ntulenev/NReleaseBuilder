@@ -1,15 +1,15 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Components;
 
 /// <summary>
-/// Component name value object.
+/// Row details message value object.
 /// </summary>
-public readonly record struct ComponentName
+public readonly record struct RowDetails
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="ComponentName"/> struct.
+    /// Initializes a new instance of the <see cref="RowDetails"/> struct.
     /// </summary>
-    /// <param name="value">Component name text.</param>
-    public ComponentName(string value)
+    /// <param name="value">Details message text.</param>
+    public RowDetails(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
 
@@ -17,10 +17,11 @@ public readonly record struct ComponentName
     }
 
     /// <summary>
-    /// Component name text value.
+    /// Details message text value.
     /// </summary>
     public string Value { get; }
 
     /// <inheritdoc />
     public override string ToString() => Value ?? string.Empty;
 }
+

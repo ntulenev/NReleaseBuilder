@@ -6,7 +6,8 @@ using NReleaseBuilder.Abstractions.Jira;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Jira.Internal;
 using NReleaseBuilder.Jira.Internal.Models;
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Jira;
 
 namespace NReleaseBuilder.Jira;
 

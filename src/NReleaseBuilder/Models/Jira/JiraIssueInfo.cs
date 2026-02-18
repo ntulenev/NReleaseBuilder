@@ -1,4 +1,4 @@
-namespace NReleaseBuilder.Models;
+namespace NReleaseBuilder.Models.Jira;
 
 /// <summary>
 /// Jira issue domain model with resolved status and title.
@@ -56,8 +56,5 @@ public sealed class JiraIssueInfo
     /// </summary>
     public bool HasBreakingChanges => !string.IsNullOrWhiteSpace(BreakingChangesDetails);
 
-    private static string? Normalize(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
+    private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

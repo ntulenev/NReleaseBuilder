@@ -2,7 +2,8 @@ using NReleaseBuilder.Abstractions.Application;
 using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Abstractions.Csv;
 using NReleaseBuilder.Abstractions.Rendering;
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Components;
 
 namespace NReleaseBuilder.Application;
 

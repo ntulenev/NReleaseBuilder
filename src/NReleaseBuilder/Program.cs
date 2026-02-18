@@ -1,6 +1,12 @@
 using System.Net.Http.Headers;
 using System.Text;
 
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
 using NReleaseBuilder.Abstractions.Application;
 using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Abstractions.Csv;
@@ -18,12 +24,6 @@ using NReleaseBuilder.Presentation;
 using NReleaseBuilder.Presentation.Console;
 using NReleaseBuilder.Presentation.Pdf;
 using NReleaseBuilder.Transport;
-
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
 

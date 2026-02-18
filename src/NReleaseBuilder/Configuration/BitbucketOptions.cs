@@ -1,6 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 
-using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Jira;
+
+
 
 namespace NReleaseBuilder.Configuration;
 

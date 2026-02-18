@@ -4,6 +4,9 @@ using NReleaseBuilder.Abstractions.Jira;
 using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Components;
+using NReleaseBuilder.Models.Jira;
 
 namespace NReleaseBuilder.Presentation;
 

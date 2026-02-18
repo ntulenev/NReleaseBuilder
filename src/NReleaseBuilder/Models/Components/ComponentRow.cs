@@ -1,4 +1,7 @@
-namespace NReleaseBuilder.Models;
+
+using NReleaseBuilder.Models.Bitbucket;
+
+namespace NReleaseBuilder.Models.Components;
 
 /// <summary>
 /// CSV input row describing component repository/version.
@@ -33,3 +36,4 @@ public readonly record struct ComponentRow
     /// </summary>
     public VersionLabel Version { get; }
 }
+

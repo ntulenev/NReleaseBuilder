@@ -1,10 +1,11 @@
+using Microsoft.Extensions.Options;
+
 using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Abstractions.Jira;
 using NReleaseBuilder.Bitbucket.Internal.Models;
 using NReleaseBuilder.Configuration;
-using NReleaseBuilder.Models;
-
-using Microsoft.Extensions.Options;
+using NReleaseBuilder.Models.Bitbucket;
+using NReleaseBuilder.Models.Jira;
 
 using NuGet.Versioning;
 
