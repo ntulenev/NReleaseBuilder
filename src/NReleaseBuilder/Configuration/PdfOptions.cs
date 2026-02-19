@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 
 namespace NReleaseBuilder.Configuration;
 
@@ -30,8 +31,25 @@ public sealed class PdfOptions
             ? "nreleasebuilder-report.pdf"
             : OutputPath.Trim();
 
-        return Path.IsPathRooted(candidatePath)
+        var absolutePath = Path.IsPathRooted(candidatePath)
             ? Path.GetFullPath(candidatePath)
             : Path.GetFullPath(candidatePath, Directory.GetCurrentDirectory());
+
+        return AppendDateSuffix(absolutePath, DateTime.Now);
+    }
+
+    private static string AppendDateSuffix(string absolutePath, DateTime currentDate)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(absolutePath);
+
+        var directoryPath = Path.GetDirectoryName(absolutePath);
+        var extension = Path.GetExtension(absolutePath);
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(absolutePath);
+        var dateSuffix = currentDate.ToString("dd_MM_yyyy", CultureInfo.InvariantCulture);
+        var datedFileName = fileNameWithoutExtension + "_" + dateSuffix + extension;
+
+        return string.IsNullOrWhiteSpace(directoryPath)
+            ? datedFileName
+            : Path.Combine(directoryPath, datedFileName);
     }
 }

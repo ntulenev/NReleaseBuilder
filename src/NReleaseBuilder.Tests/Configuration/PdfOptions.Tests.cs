@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using FluentAssertions;
 
 using NReleaseBuilder.Configuration;
@@ -15,7 +17,10 @@ public class PdfOptionsTests
         {
             OutputPath = Path.Combine("reports", "result.pdf"),
         };
-        var expected = Path.GetFullPath(options.OutputPath, Directory.GetCurrentDirectory());
+        var dateSuffix = DateTime.Now.ToString("dd_MM_yyyy", CultureInfo.InvariantCulture);
+        var expected = Path.GetFullPath(
+            Path.Combine("reports", $"result_{dateSuffix}.pdf"),
+            Directory.GetCurrentDirectory());
 
         // Act
         var result = options.ResolveOutputPath();
@@ -33,7 +38,8 @@ public class PdfOptionsTests
         {
             OutputPath = "  report.pdf  ",
         };
-        var expected = Path.GetFullPath("report.pdf", Directory.GetCurrentDirectory());
+        var dateSuffix = DateTime.Now.ToString("dd_MM_yyyy", CultureInfo.InvariantCulture);
+        var expected = Path.GetFullPath($"report_{dateSuffix}.pdf", Directory.GetCurrentDirectory());
 
         // Act
         var result = options.ResolveOutputPath();
@@ -51,7 +57,8 @@ public class PdfOptionsTests
         {
             OutputPath = " ",
         };
-        var expected = Path.GetFullPath("nreleasebuilder-report.pdf", Directory.GetCurrentDirectory());
+        var dateSuffix = DateTime.Now.ToString("dd_MM_yyyy", CultureInfo.InvariantCulture);
+        var expected = Path.GetFullPath($"nreleasebuilder-report_{dateSuffix}.pdf", Directory.GetCurrentDirectory());
 
         // Act
         var result = options.ResolveOutputPath();
@@ -70,7 +77,9 @@ public class PdfOptionsTests
         {
             OutputPath = rootedPath,
         };
-        var expected = Path.GetFullPath(rootedPath);
+        var dateSuffix = DateTime.Now.ToString("dd_MM_yyyy", CultureInfo.InvariantCulture);
+        var expected = Path.GetFullPath(
+            Path.Combine(Path.GetDirectoryName(rootedPath)!, $"nrb-report_{dateSuffix}.pdf"));
 
         // Act
         var result = options.ResolveOutputPath();

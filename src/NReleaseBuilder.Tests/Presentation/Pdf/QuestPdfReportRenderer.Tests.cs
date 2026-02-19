@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Globalization;
 
 using Microsoft.Extensions.Options;
 
@@ -171,7 +172,10 @@ public class QuestPdfReportRendererTests
             [new JiraStatusName("Done")] = 1,
         };
 
-        var expectedOutputPath = Path.GetFullPath(settings.Pdf.OutputPath, Directory.GetCurrentDirectory());
+        var dateSuffix = DateTime.Now.ToString("dd_MM_yyyy", CultureInfo.InvariantCulture);
+        var expectedOutputPath = Path.GetFullPath(
+            Path.Combine("reports", $"latest-report_{dateSuffix}.pdf"),
+            Directory.GetCurrentDirectory());
 
         var composeContentCalls = 0;
         var saveCalls = 0;
