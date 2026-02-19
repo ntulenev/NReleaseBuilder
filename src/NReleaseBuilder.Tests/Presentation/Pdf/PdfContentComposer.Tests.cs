@@ -1,5 +1,10 @@
+using System.Text;
+
 using FluentAssertions;
 
+using Microsoft.Extensions.Options;
+
+using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 using NReleaseBuilder.Models.Jira;
@@ -20,6 +25,20 @@ public class PdfContentComposerTests
         // Arrange
         // Act
         var exception = Record.Exception(() => _ = new PdfContentComposer());
+
+        // Assert
+        exception.Should().BeNull();
+    }
+
+    [Fact(DisplayName = "PdfContentComposer can be created with options.")]
+    [Trait("Category", "Unit")]
+    public void PdfContentComposerCanBeCreatedWithOptions()
+    {
+        // Arrange
+        var options = Options.Create(CreateAppSettings("https://jira.example.test"));
+
+        // Act
+        var exception = Record.Exception(() => _ = new PdfContentComposer(options));
 
         // Assert
         exception.Should().BeNull();
@@ -125,6 +144,98 @@ public class PdfContentComposerTests
         exception.Should().BeNull();
     }
 
+    [Fact(DisplayName = "PdfContentComposer ComposeContent renders JiraTask links when Jira base url is configured.")]
+    [Trait("Category", "Unit")]
+    public void ComposeContentRendersJiraTaskLinksWhenJiraBaseUrlIsConfigured()
+    {
+        // Arrange
+        var options = Options.Create(CreateAppSettings("https://jira.example.test"));
+        var sut = new PdfContentComposer(options);
+        var rows =
+            new[]
+            {
+                CreateRow(
+                    1,
+                    "api",
+                    "repo-api",
+                    "1.0.0",
+                    CheckStatus.Outdated,
+                    "Has newer versions",
+                    [
+                        CreateVersion(
+                            "1.1.0",
+                            "APP-1, APP-2",
+                            "Task title",
+                            "Done",
+                            hasRequiredActions: false,
+                            hasBreakingChanges: false,
+                            hasDependencyIssues: false,
+                            requiredActionsDetails: null,
+                            breakingChangesDetails: null),
+                    ]),
+            };
+        var allowedStatuses = new[] { new JiraStatusName("Done") };
+        IReadOnlyDictionary<JiraStatusName, int> statusStatistics = new Dictionary<JiraStatusName, int>
+        {
+            [new JiraStatusName("Done")] = 2,
+        };
+
+        // Act
+        var pdfBytes = GeneratePdf(column =>
+            sut.ComposeContent(column, rows, allowedStatuses, statusStatistics));
+        var pdfText = Encoding.ASCII.GetString(pdfBytes);
+
+        // Assert
+        pdfText.Should().Contain("https://jira.example.test/browse/APP-1");
+        pdfText.Should().Contain("https://jira.example.test/browse/APP-2");
+    }
+
+    [Fact(DisplayName = "PdfContentComposer ComposeContent renders Jira links in BC or RA details.")]
+    [Trait("Category", "Unit")]
+    public void ComposeContentRendersJiraLinksInBcOrRaDetails()
+    {
+        // Arrange
+        var options = Options.Create(CreateAppSettings("https://jira.example.test"));
+        var sut = new PdfContentComposer(options);
+        var rows =
+            new[]
+            {
+                CreateRow(
+                    1,
+                    "api",
+                    "repo-api",
+                    "1.0.0",
+                    CheckStatus.Outdated,
+                    "Has newer versions",
+                    [
+                        CreateVersion(
+                            "1.1.0",
+                            "N/A",
+                            "Task title",
+                            "Done",
+                            hasRequiredActions: false,
+                            hasBreakingChanges: true,
+                            hasDependencyIssues: false,
+                            requiredActionsDetails: null,
+                            breakingChangesDetails: "Need FE part ADF-13848 and https://jira.example.test/browse/ADF-13849"),
+                    ]),
+            };
+        var allowedStatuses = new[] { new JiraStatusName("Done") };
+        IReadOnlyDictionary<JiraStatusName, int> statusStatistics = new Dictionary<JiraStatusName, int>
+        {
+            [new JiraStatusName("Done")] = 1,
+        };
+
+        // Act
+        var pdfBytes = GeneratePdf(column =>
+            sut.ComposeContent(column, rows, allowedStatuses, statusStatistics));
+        var pdfText = Encoding.ASCII.GetString(pdfBytes);
+
+        // Assert
+        pdfText.Should().Contain("/URI (https://jira.example.test/browse/ADF-13848)");
+        pdfText.Should().Contain("/URI (https://jira.example.test/browse/ADF-13849)");
+    }
+
     private static byte[] GeneratePdf(Action<ColumnDescriptor> composeContent)
     {
         QuestPDF.Settings.License = LicenseType.Community;
@@ -185,4 +296,28 @@ public class PdfContentComposerTests
             hasRequiredActions,
             hasBreakingChanges,
             hasDependencyIssues);
+
+    private static AppSettings CreateAppSettings(string jiraBaseUrl) =>
+        new()
+        {
+            CsvFilePath = "components.csv",
+            Bitbucket = new BitbucketOptions
+            {
+                BaseUrl = new Uri("https://api.bitbucket.org/2.0"),
+                Workspace = "workspace",
+                AuthEmail = "bitbucket@example.test",
+                AuthApiToken = "token",
+            },
+            Jira = new JiraOptions
+            {
+                BaseUrl = new Uri(jiraBaseUrl),
+                Email = "jira@example.test",
+                ApiToken = "token",
+            },
+            Pdf = new PdfOptions
+            {
+                Enabled = true,
+                OutputPath = "report.pdf",
+            },
+        };
 }

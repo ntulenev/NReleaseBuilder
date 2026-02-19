@@ -1,6 +1,10 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
+
+using Microsoft.Extensions.Options;
 
 using NReleaseBuilder.Abstractions.Rendering;
+using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models.Components;
 using NReleaseBuilder.Models.Jira;
 
@@ -11,8 +15,28 @@ namespace NReleaseBuilder.Presentation.Pdf;
 /// <summary>
 /// Default implementation for composing PDF page content.
 /// </summary>
-public sealed class PdfContentComposer : IPdfContentComposer
+public sealed partial class PdfContentComposer : IPdfContentComposer
 {
+    private const string JIRA_LINK_COLOR_HEX = "#1d4ed8";
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfContentComposer"/> class.
+    /// </summary>
+    public PdfContentComposer()
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfContentComposer"/> class.
+    /// </summary>
+    /// <param name="options">Application settings options.</param>
+    public PdfContentComposer(IOptions<AppSettings> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        _jiraBrowseBaseUrl = BuildBaseJiraUrl(options.Value.Jira.BaseUrl);
+    }
+
     /// <inheritdoc />
     public void ComposeContent(
         ColumnDescriptor column,
@@ -67,7 +91,7 @@ public sealed class PdfContentComposer : IPdfContentComposer
         _ = column.Item().Text("Top disallowed statuses: " + string.Join(", ", topDisallowed));
     }
 
-    private static void ComposePdfResultsSection(ColumnDescriptor column, IReadOnlyList<ComponentCheckRow> rows)
+    private void ComposePdfResultsSection(ColumnDescriptor column, IReadOnlyList<ComponentCheckRow> rows)
     {
         _ = column.Item().Text("Results").Bold().FontSize(12);
 
@@ -105,7 +129,7 @@ public sealed class PdfContentComposer : IPdfContentComposer
         ComposePdfStatusDetailsSection(column, rows);
     }
 
-    private static void ComposePdfOutdatedVersionsSection(
+    private void ComposePdfOutdatedVersionsSection(
         ColumnDescriptor column,
         IReadOnlyList<ComponentCheckRow> rows)
     {
@@ -167,7 +191,8 @@ public sealed class PdfContentComposer : IPdfContentComposer
                     foreach (var version in row.NewerVersions)
                     {
                         _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.Version.Value);
-                        _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.JiraTask.Value);
+                        table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(text =>
+                            ComposeJiraTaskText(text, version.JiraTask.Value, isBold: false));
                         _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.JiraTitle.Value);
                         _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.JiraStatus.Value);
                         table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(text =>
@@ -215,7 +240,7 @@ public sealed class PdfContentComposer : IPdfContentComposer
         }
     }
 
-    private static void ComposePdfReleaseAlertDetailsSection(
+    private void ComposePdfReleaseAlertDetailsSection(
         ColumnDescriptor column,
         IReadOnlyList<VersionJiraRow> versions)
     {
@@ -245,7 +270,7 @@ public sealed class PdfContentComposer : IPdfContentComposer
             static detail => detail.RequiredActionsDetails ?? string.Empty);
     }
 
-    private static void ComposePdfReleaseAlertGroup(
+    private void ComposePdfReleaseAlertGroup(
         ColumnDescriptor column,
         string title,
         JiraTaskAlertDetails[] taskDetails,
@@ -260,8 +285,15 @@ public sealed class PdfContentComposer : IPdfContentComposer
 
         foreach (var taskDetail in taskDetails)
         {
-            _ = column.Item().Text(taskDetail.Task.Value + " - " + taskDetail.Title.Value).Bold();
-            _ = column.Item().Element(PdfPresentationHelpers.StylePdfAlertDetailsBox).Text(detailSelector(taskDetail));
+            column.Item().Text(text =>
+            {
+                ComposeJiraTaskText(text, taskDetail.Task.Value, isBold: true);
+                _ = text.Span(" - " + taskDetail.Title.Value).Bold();
+            });
+            column
+                .Item()
+                .Element(PdfPresentationHelpers.StylePdfAlertDetailsBox)
+                .Text(text => ComposeJiraAwareDetailsText(text, detailSelector(taskDetail)));
         }
     }
 
@@ -351,4 +383,198 @@ public sealed class PdfContentComposer : IPdfContentComposer
             }
         });
     }
+
+    private void ComposeJiraTaskText(TextDescriptor text, string taskReference, bool isBold)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(taskReference);
+
+        var taskValues = SplitTaskValues(taskReference);
+        if (taskValues.Length == 0)
+        {
+            var fallbackSpan = text.Span(taskReference);
+            if (isBold)
+            {
+                _ = fallbackSpan.Bold();
+            }
+
+            return;
+        }
+
+        for (var index = 0; index < taskValues.Length; index++)
+        {
+            if (index > 0)
+            {
+                _ = text.Span(", ");
+            }
+
+            var taskValue = taskValues[index];
+            if (TryBuildJiraBrowseTaskUrl(taskValue, out var taskUrl))
+            {
+                var hyperlink = text.Hyperlink(taskValue, taskUrl);
+                _ = ApplyJiraHyperlinkStyle(hyperlink);
+
+                if (isBold)
+                {
+                    _ = hyperlink.Bold();
+                }
+
+                continue;
+            }
+
+            var plainSpan = text.Span(taskValue);
+            if (isBold)
+            {
+                _ = plainSpan.Bold();
+            }
+        }
+    }
+
+    private void ComposeJiraAwareDetailsText(TextDescriptor text, string details)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(details);
+
+        var currentIndex = 0;
+
+        foreach (Match browseUrlMatch in JiraBrowseUrlRegex().Matches(details))
+        {
+            if (browseUrlMatch.Index > currentIndex)
+            {
+                var segment = details[currentIndex..browseUrlMatch.Index];
+                AppendSegmentWithTaskLinks(text, segment);
+            }
+
+            var browseUrl = browseUrlMatch.Value;
+            var browseUrlHyperlink = text.Hyperlink(browseUrl, browseUrl);
+            _ = ApplyJiraHyperlinkStyle(browseUrlHyperlink);
+            currentIndex = browseUrlMatch.Index + browseUrlMatch.Length;
+        }
+
+        if (currentIndex < details.Length)
+        {
+            var tailSegment = details[currentIndex..];
+            AppendSegmentWithTaskLinks(text, tailSegment);
+        }
+    }
+
+    private void AppendSegmentWithTaskLinks(TextDescriptor text, string segment)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(segment);
+
+        if (segment.Length == 0)
+        {
+            return;
+        }
+
+        var currentIndex = 0;
+
+        foreach (Match taskMatch in JiraTaskKeyRegex().Matches(segment))
+        {
+            if (taskMatch.Index > currentIndex)
+            {
+                _ = text.Span(segment[currentIndex..taskMatch.Index]);
+            }
+
+            var taskValue = taskMatch.Groups["task"].Value;
+            if (TryBuildJiraBrowseTaskUrl(taskValue, out var taskUrl))
+            {
+                var taskHyperlink = text.Hyperlink(taskValue, taskUrl);
+                _ = ApplyJiraHyperlinkStyle(taskHyperlink);
+            }
+            else
+            {
+                _ = text.Span(taskValue);
+            }
+
+            currentIndex = taskMatch.Index + taskMatch.Length;
+        }
+
+        if (currentIndex < segment.Length)
+        {
+            _ = text.Span(segment[currentIndex..]);
+        }
+    }
+
+    private static TextSpanDescriptor ApplyJiraHyperlinkStyle(TextSpanDescriptor hyperlink) =>
+        hyperlink
+            .FontColor(JIRA_LINK_COLOR_HEX)
+            .Underline();
+
+    [GeneratedRegex(
+        @"https?://[^\s\)\]\}<>""']+/browse/(?<task>[A-Za-z][A-Za-z0-9_]*-\d+)(?![A-Za-z0-9_])",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex JiraBrowseUrlRegex();
+
+    [GeneratedRegex(
+        @"(?<![A-Za-z0-9_])(?<task>[A-Za-z][A-Za-z0-9_]*-\d+)(?![A-Za-z0-9_])",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex JiraTaskKeyRegex();
+
+    private bool TryBuildJiraBrowseTaskUrl(string taskValue, out string taskUrl)
+    {
+        if (_jiraBrowseBaseUrl is null || !IsTrackableJiraTask(taskValue))
+        {
+            taskUrl = string.Empty;
+            return false;
+        }
+
+        taskUrl = new Uri(_jiraBrowseBaseUrl, "browse/" + taskValue).ToString();
+        return true;
+    }
+
+    private static Uri BuildBaseJiraUrl(Uri baseUrl)
+    {
+        ArgumentNullException.ThrowIfNull(baseUrl);
+
+        return new Uri(baseUrl.ToString().TrimEnd('/') + "/", UriKind.Absolute);
+    }
+
+    private static string[] SplitTaskValues(string value) =>
+    [
+        .. value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static x => !string.IsNullOrWhiteSpace(x))
+    ];
+
+    private static bool IsTrackableJiraTask(string taskKey)
+    {
+        if (string.Equals(taskKey, JiraTaskReference.NotAvailable.Value, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var dashIndex = taskKey.IndexOf('-', StringComparison.Ordinal);
+        if (dashIndex <= 0 || dashIndex == taskKey.Length - 1)
+        {
+            return false;
+        }
+
+        if (!char.IsLetter(taskKey[0]))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < dashIndex; i++)
+        {
+            var symbol = taskKey[i];
+            if (!char.IsLetterOrDigit(symbol) && symbol != '_')
+            {
+                return false;
+            }
+        }
+
+        for (var i = dashIndex + 1; i < taskKey.Length; i++)
+        {
+            if (!char.IsDigit(taskKey[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private readonly Uri? _jiraBrowseBaseUrl;
 }
