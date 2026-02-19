@@ -38,7 +38,7 @@ public class BitbucketTagLookupCoreTests
     public void ConstructorThrowsWhenIntegrationCoreIsNull()
     {
         // Arrange
-        var options = CreateOptions(useTruncatedFallback: false);
+        var options = CreateOptions();
         var jiraTaskResolver = new Mock<IJiraTaskResolver>(MockBehavior.Strict).Object;
 
         // Act
@@ -53,7 +53,7 @@ public class BitbucketTagLookupCoreTests
     public void ConstructorThrowsWhenJiraTaskResolverIsNull()
     {
         // Arrange
-        var options = CreateOptions(useTruncatedFallback: false);
+        var options = CreateOptions();
         var integrationCore = new Mock<IBitbucketIntegrationCore>(MockBehavior.Strict).Object;
 
         // Act
@@ -68,7 +68,7 @@ public class BitbucketTagLookupCoreTests
     public async Task GetRepositoryTagLookupAsyncReturnsRepositoryNotFoundLookupWhenRepositoryIsMissing()
     {
         // Arrange
-        var options = CreateOptions(useTruncatedFallback: false);
+        var options = CreateOptions();
         var repository = new RepositoryName("service.api");
         using var cts = new CancellationTokenSource();
         var integrationCallCount = 0;
@@ -99,14 +99,13 @@ public class BitbucketTagLookupCoreTests
         result.Tags.Should().BeEmpty();
     }
 
-    [Fact(DisplayName = "BitbucketTagLookupCore GetRepositoryTagLookupAsync uses truncated fallback when configured.")]
+    [Fact(DisplayName = "BitbucketTagLookupCore GetRepositoryTagLookupAsync does not retry with truncated repository name.")]
     [Trait("Category", "Unit")]
-    public async Task GetRepositoryTagLookupAsyncUsesTruncatedFallbackWhenConfigured()
+    public async Task GetRepositoryTagLookupAsyncDoesNotRetryWithTruncatedRepositoryName()
     {
         // Arrange
-        var options = CreateOptions(useTruncatedFallback: true);
+        var options = CreateOptions();
         var repository = new RepositoryName("service.api");
-        var truncatedRepository = new RepositoryName("service");
         using var cts = new CancellationTokenSource();
         var integrationCallCount = 0;
 
@@ -117,12 +116,6 @@ public class BitbucketTagLookupCoreTests
                 It.Is<CancellationToken>(value => value == cts.Token)))
             .Callback(() => integrationCallCount++)
             .ReturnsAsync(RepositoryTagReferenceLoadResult.RepoNotFound());
-        integrationCoreMock
-            .Setup(x => x.LoadRepositoryTagReferencesAsync(
-                It.Is<RepositoryName>(value => value == truncatedRepository),
-                It.Is<CancellationToken>(value => value == cts.Token)))
-            .Callback(() => integrationCallCount++)
-            .ReturnsAsync(RepositoryTagReferenceLoadResult.Success([]));
 
         var jiraTaskResolverMock = new Mock<IJiraTaskResolver>(MockBehavior.Strict);
         var sut = new BitbucketTagLookupCore(options, integrationCoreMock.Object, jiraTaskResolverMock.Object);
@@ -135,10 +128,10 @@ public class BitbucketTagLookupCoreTests
             cancellationToken: cts.Token);
 
         // Assert
-        integrationCallCount.Should().Be(2);
-        result.IsRepositoryMissing.Should().BeFalse();
+        integrationCallCount.Should().Be(1);
+        result.IsRepositoryMissing.Should().BeTrue();
         result.Error.Should().BeNull();
-        result.ResolvedRepository.Should().Be(truncatedRepository);
+        result.ResolvedRepository.Should().Be(repository);
         result.Tags.Should().BeEmpty();
     }
 
@@ -147,7 +140,7 @@ public class BitbucketTagLookupCoreTests
     public async Task GetRepositoryTagLookupAsyncReturnsApiErrorLookup()
     {
         // Arrange
-        var options = CreateOptions(useTruncatedFallback: false);
+        var options = CreateOptions();
         var repository = new RepositoryName("service.api");
         using var cts = new CancellationTokenSource();
         const string apiError = "bitbucket api failed";
@@ -181,7 +174,7 @@ public class BitbucketTagLookupCoreTests
     public async Task GetRepositoryTagLookupAsyncBuildsEnrichedTagsFiltersByVersionAndUsesCommitCache()
     {
         // Arrange
-        var options = CreateOptions(useTruncatedFallback: false);
+        var options = CreateOptions();
         var repository = new RepositoryName("service.api");
         var commitHash = new CommitHash("abc123");
         var projectName = new JiraProjectName("PROJ");
@@ -287,7 +280,7 @@ public class BitbucketTagLookupCoreTests
         result.Tags[2].PullRequestUrl.Should().BeNull();
     }
 
-    private static IOptions<AppSettings> CreateOptions(bool useTruncatedFallback)
+    private static IOptions<AppSettings> CreateOptions()
     {
         var settings = new AppSettings
         {
@@ -299,7 +292,6 @@ public class BitbucketTagLookupCoreTests
                 ProjectNames = ["PROJ"],
                 AuthEmail = "bot@example.test",
                 AuthApiToken = "token",
-                UseTruncatedRepositoryNameFallback = useTruncatedFallback,
             },
             Jira = new JiraOptions
             {

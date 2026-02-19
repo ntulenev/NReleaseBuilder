@@ -1,5 +1,7 @@
 using FluentAssertions;
 
+using Microsoft.Extensions.Options;
+
 using Moq;
 
 using NuGet.Versioning;
@@ -8,6 +10,7 @@ using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Abstractions.Csv;
 using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Application;
+using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 
@@ -26,7 +29,12 @@ public class VersionCheckApplicationTests
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
 
         // Act
-        var exception = Record.Exception(() => new VersionCheckApplication(csvReader, repositoryLoader, versionChecker, renderer));
+        var exception = Record.Exception(() => new VersionCheckApplication(
+            csvReader,
+            repositoryLoader,
+            versionChecker,
+            renderer,
+            CreateOptions()));
 
         // Assert
         exception.Should().BeNull();
@@ -42,7 +50,12 @@ public class VersionCheckApplicationTests
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
 
         // Act
-        var exception = Record.Exception(() => new VersionCheckApplication(null!, repositoryLoader, versionChecker, renderer));
+        var exception = Record.Exception(() => new VersionCheckApplication(
+            null!,
+            repositoryLoader,
+            versionChecker,
+            renderer,
+            CreateOptions()));
 
         // Assert
         exception.Should().NotBeNull().And.BeOfType<ArgumentNullException>();
@@ -58,7 +71,12 @@ public class VersionCheckApplicationTests
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
 
         // Act
-        var exception = Record.Exception(() => new VersionCheckApplication(csvReader, null!, versionChecker, renderer));
+        var exception = Record.Exception(() => new VersionCheckApplication(
+            csvReader,
+            null!,
+            versionChecker,
+            renderer,
+            CreateOptions()));
 
         // Assert
         exception.Should().NotBeNull().And.BeOfType<ArgumentNullException>();
@@ -74,7 +92,12 @@ public class VersionCheckApplicationTests
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
 
         // Act
-        var exception = Record.Exception(() => new VersionCheckApplication(csvReader, repositoryLoader, null!, renderer));
+        var exception = Record.Exception(() => new VersionCheckApplication(
+            csvReader,
+            repositoryLoader,
+            null!,
+            renderer,
+            CreateOptions()));
 
         // Assert
         exception.Should().NotBeNull().And.BeOfType<ArgumentNullException>();
@@ -90,7 +113,34 @@ public class VersionCheckApplicationTests
         var versionChecker = new Mock<IComponentVersionChecker>(MockBehavior.Strict).Object;
 
         // Act
-        var exception = Record.Exception(() => new VersionCheckApplication(csvReader, repositoryLoader, versionChecker, null!));
+        var exception = Record.Exception(() => new VersionCheckApplication(
+            csvReader,
+            repositoryLoader,
+            versionChecker,
+            null!,
+            CreateOptions()));
+
+        // Assert
+        exception.Should().NotBeNull().And.BeOfType<ArgumentNullException>();
+    }
+
+    [Fact(DisplayName = "VersionCheckApplication cant be created with null options.")]
+    [Trait("Category", "Unit")]
+    public void VersionCheckApplicationCantBeCreatedWithNullOptions()
+    {
+        // Arrange
+        var csvReader = new Mock<ICsvComponentReader>(MockBehavior.Strict).Object;
+        var repositoryLoader = new Mock<IRepositoryTagLookupBatchLoader>(MockBehavior.Strict).Object;
+        var versionChecker = new Mock<IComponentVersionChecker>(MockBehavior.Strict).Object;
+        var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
+
+        // Act
+        var exception = Record.Exception(() => new VersionCheckApplication(
+            csvReader,
+            repositoryLoader,
+            versionChecker,
+            renderer,
+            null!));
 
         // Assert
         exception.Should().NotBeNull().And.BeOfType<ArgumentNullException>();
@@ -115,7 +165,8 @@ public class VersionCheckApplicationTests
             csvReaderMock.Object,
             repositoryLoaderMock.Object,
             versionCheckerMock.Object,
-            rendererMock.Object);
+            rendererMock.Object,
+            CreateOptions());
 
         // Act
         var result = await sut.RunAsync(CancellationToken.None);
@@ -155,7 +206,8 @@ public class VersionCheckApplicationTests
             csvReaderMock.Object,
             repositoryLoaderMock.Object,
             versionCheckerMock.Object,
-            rendererMock.Object);
+            rendererMock.Object,
+            CreateOptions());
 
         // Act
         var result = await sut.RunAsync(CancellationToken.None);
@@ -235,7 +287,8 @@ public class VersionCheckApplicationTests
             csvReaderMock.Object,
             repositoryLoaderMock.Object,
             versionCheckerMock.Object,
-            rendererMock.Object);
+            rendererMock.Object,
+            CreateOptions());
 
         // Act
         var result = await sut.RunAsync(cts.Token);
@@ -379,7 +432,8 @@ public class VersionCheckApplicationTests
             csvReaderMock.Object,
             repositoryLoaderMock.Object,
             versionCheckerMock.Object,
-            rendererMock.Object);
+            rendererMock.Object,
+            CreateOptions());
 
         // Act
         var result = await sut.RunAsync(cts.Token);
@@ -408,9 +462,110 @@ public class VersionCheckApplicationTests
         capturedRowsForRenderer.Should().BeSameAs(expectedRows);
     }
 
+    [Fact(DisplayName = "RunAsync applies repository overrides before building repository context.")]
+    [Trait("Category", "Unit")]
+    public async Task RunAsyncAppliesRepositoryOverridesBeforeBuildingRepositoryContext()
+    {
+        // Arrange
+        var componentRows = new List<ComponentRow>
+        {
+            Component("api", "repo-api", "1.0.0"),
+            Component("gateway", "repo-gateway", "0.9.0"),
+        };
+
+        var normalizedRepository = new RepositoryName("repo-shared");
+        var expectedMinVersion = NuGetVersion.Parse("0.9.0");
+        var tagLookups = new Dictionary<RepositoryName, RepositoryTagLookup>
+        {
+            [normalizedRepository] = RepositoryTagLookup.Success(normalizedRepository, []),
+        };
+        IReadOnlyList<ComponentCheckRow> expectedRows = [];
+        using var cts = new CancellationTokenSource();
+
+        var csvReaderMock = new Mock<ICsvComponentReader>(MockBehavior.Strict);
+        csvReaderMock
+            .Setup(x => x.Read())
+            .Returns(componentRows);
+
+        var repositoryLoaderMock = new Mock<IRepositoryTagLookupBatchLoader>(MockBehavior.Strict);
+        repositoryLoaderMock
+            .Setup(x => x.LoadAsync(
+                It.Is<IReadOnlyList<RepositoryName>>(repositories =>
+                    repositories.Count == 1
+                    && repositories[0] == normalizedRepository),
+                It.Is<IReadOnlyDictionary<RepositoryName, NuGetVersion>>(minVersions =>
+                    minVersions.Count == 1
+                    && minVersions.ContainsKey(normalizedRepository)
+                    && minVersions[normalizedRepository] == expectedMinVersion),
+                It.Is<CancellationToken>(token => token == cts.Token)))
+            .ReturnsAsync(tagLookups);
+
+        var versionCheckerMock = new Mock<IComponentVersionChecker>(MockBehavior.Strict);
+        versionCheckerMock
+            .Setup(x => x.BuildRows(
+                It.Is<IReadOnlyList<ComponentRow>>(rows =>
+                    rows.Count == 2
+                    && rows[0].Repository == normalizedRepository
+                    && rows[1].Repository == normalizedRepository
+                    && rows[0].Component == componentRows[0].Component
+                    && rows[1].Component == componentRows[1].Component),
+                It.Is<IReadOnlyDictionary<RepositoryName, RepositoryTagLookup>>(lookups =>
+                    ReferenceEquals(lookups, tagLookups))))
+            .Returns(expectedRows);
+
+        var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
+        rendererMock
+            .Setup(x => x.RenderHeader());
+        rendererMock
+            .Setup(x => x.PrintRepositoryCheckCount(It.Is<int>(count => count == 1)));
+        rendererMock
+            .Setup(x => x.RenderResults(It.Is<IReadOnlyList<ComponentCheckRow>>(rows => ReferenceEquals(rows, expectedRows))));
+
+        var sut = new VersionCheckApplication(
+            csvReaderMock.Object,
+            repositoryLoaderMock.Object,
+            versionCheckerMock.Object,
+            rendererMock.Object,
+            CreateOptions(new Dictionary<string, string>
+            {
+                ["repo-api"] = "repo-shared",
+                ["repo-gateway"] = "repo-shared",
+            }));
+
+        // Act
+        var result = await sut.RunAsync(cts.Token);
+
+        // Assert
+        result.Should().Be(0);
+    }
+
     private static ComponentRow Component(string component, string repository, string version) =>
         new(
             new ComponentName(component),
             new RepositoryName(repository),
             new VersionLabel(version));
+
+    private static IOptions<AppSettings> CreateOptions(
+        IReadOnlyDictionary<string, string>? repositoryNameOverrides = null)
+    {
+        var settings = new AppSettings
+        {
+            CsvFilePath = "components.csv",
+            Bitbucket = new BitbucketOptions
+            {
+                BaseUrl = new Uri("https://bitbucket.example.test/"),
+                Workspace = "workspace",
+                ProjectNames = ["PROJ"],
+                AuthEmail = "bot@example.test",
+                AuthApiToken = "token",
+                RepositoryNameOverrides = repositoryNameOverrides ?? new Dictionary<string, string>(),
+            },
+            Jira = new JiraOptions
+            {
+                BaseUrl = new Uri("https://jira.example.test/"),
+            },
+        };
+
+        return Options.Create(settings);
+    }
 }

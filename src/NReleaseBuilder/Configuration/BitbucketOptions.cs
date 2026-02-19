@@ -68,11 +68,6 @@ public sealed class BitbucketOptions
     public int MaxParallelRequests { get; init; } = 6;
 
     /// <summary>
-    /// Enables fallback lookup that retries missing repositories without the last dot-separated segment.
-    /// </summary>
-    public bool UseTruncatedRepositoryNameFallback { get; init; }
-
-    /// <summary>
     /// Optional mapping from CSV repository names to real Bitbucket repository names.
     /// </summary>
     public IReadOnlyDictionary<string, string> RepositoryNameOverrides { get; init; } =

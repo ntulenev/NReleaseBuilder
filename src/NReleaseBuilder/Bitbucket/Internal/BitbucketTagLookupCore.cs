@@ -70,27 +70,11 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
         RepositoryName repository,
         CancellationToken cancellationToken)
     {
-        var repositoryForBitbucketCalls = _bitbucketOptions.ResolveRepositoryName(repository);
+        var repositoryForBitbucketCalls = repository;
         var tagLoadResult = await _bitbucketIntegrationCore.LoadRepositoryTagReferencesAsync(
                 repositoryForBitbucketCalls,
                 cancellationToken)
             .ConfigureAwait(false);
-
-        if (tagLoadResult.IsRepositoryMissing
-            && _bitbucketOptions.UseTruncatedRepositoryNameFallback
-            && TryBuildTruncatedRepositoryName(repositoryForBitbucketCalls) is { } truncatedRepository)
-        {
-            var fallbackLoadResult = await _bitbucketIntegrationCore.LoadRepositoryTagReferencesAsync(
-                    truncatedRepository,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            if (!fallbackLoadResult.IsRepositoryMissing)
-            {
-                repositoryForBitbucketCalls = truncatedRepository;
-                tagLoadResult = fallbackLoadResult;
-            }
-        }
 
         return (repositoryForBitbucketCalls, tagLoadResult);
     }
@@ -222,19 +206,6 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
             .. tags.Where(tag => minCurrentVersion is null
                 || (VersionParser.TryParse(tag.Name, out var parsedVersion) && parsedVersion > minCurrentVersion))
         ];
-    }
-
-    private static RepositoryName? TryBuildTruncatedRepositoryName(RepositoryName repository)
-    {
-        var value = repository.Value;
-        var lastDotIndex = value.LastIndexOf('.');
-
-        if (lastDotIndex <= 0 || lastDotIndex == value.Length - 1)
-        {
-            return null;
-        }
-
-        return new RepositoryName(value[..lastDotIndex]);
     }
 
     private readonly IBitbucketIntegrationCore _bitbucketIntegrationCore;

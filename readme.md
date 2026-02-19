@@ -87,7 +87,6 @@ Recommended example:
     "PageLen": 50,
     "RetryCount": 2,
     "MaxParallelRequests": 6,
-    "UseTruncatedRepositoryNameFallback": false,
     "RepositoryNameOverrides": {}
   },
   "Jira": {
@@ -127,7 +126,6 @@ Recommended example:
 | `PageLen` | No | `50` | Tags page size. Allowed range: `1..100`. |
 | `RetryCount` | No | `2` | Retry attempts for transient HTTP errors. Allowed range: `0..10`. |
 | `MaxParallelRequests` | No | `6` | Parallel request limit. Allowed range: `1..20`. |
-| `UseTruncatedRepositoryNameFallback` | No | `false` | Retry lookup with last dot-separated segment removed when repo is not found. |
 | `RepositoryNameOverrides` | No | `{}` | Maps CSV repo names to actual Bitbucket repo names. |
 
 Bitbucket repository name matching notes:
@@ -135,7 +133,6 @@ Bitbucket repository name matching notes:
 - By default, repository name comes from the image name parsed from CSV.
 - In some environments, image name and Bitbucket repository name are not equal.
 - Use `RepositoryNameOverrides` to map image/CSV repository names to actual Bitbucket repositories.
-- Enable `UseTruncatedRepositoryNameFallback` to retry with a truncated name when lookup returns repository not found.
 
 `Bitbucket` validation rules:
 
