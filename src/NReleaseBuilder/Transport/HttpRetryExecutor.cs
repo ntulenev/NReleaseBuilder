@@ -50,6 +50,7 @@ public sealed class HttpRetryExecutor : IHttpRetryExecutor
 
     private static bool IsTransientStatusCode(HttpStatusCode statusCode)
         => statusCode is HttpStatusCode.RequestTimeout
+            or HttpStatusCode.Forbidden
             or HttpStatusCode.TooManyRequests
             or HttpStatusCode.InternalServerError
             or HttpStatusCode.BadGateway

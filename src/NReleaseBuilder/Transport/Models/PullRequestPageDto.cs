@@ -9,4 +9,9 @@ public sealed class PullRequestPageDto
     /// Pull request items.
     /// </summary>
     public IReadOnlyList<PullRequestDto>? Values { get; init; }
+
+    /// <summary>
+    /// URL to the next page when pagination is available.
+    /// </summary>
+    public string? Next { get; init; }
 }

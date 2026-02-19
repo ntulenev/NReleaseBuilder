@@ -122,23 +122,37 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
         CancellationToken cancellationToken)
     {
         var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
-        var pullRequestsUrl = new Uri(
+        Uri? next = new Uri(
             $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash.Value)}/pullrequests?pagelen={_bitbucketOptions.PageLen}",
             UriKind.Relative);
+        Uri? fallbackPullRequestUrl = null;
 
-        using var response = await _httpRetryExecutor.GetAsync(
-            httpClient,
-            pullRequestsUrl,
-            _bitbucketOptions.RetryCount,
-            cancellationToken).ConfigureAwait(false);
-
-        if (!response.IsSuccessStatusCode)
+        while (next is not null)
         {
-            return null;
+            using var response = await _httpRetryExecutor.GetAsync(
+                httpClient,
+                next,
+                _bitbucketOptions.RetryCount,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return fallbackPullRequestUrl;
+            }
+
+            var page = await ReadPullRequestPageAsync(response, cancellationToken).ConfigureAwait(false);
+            var pullRequests = page?.Values ?? [];
+
+            if (TrySelectMergedPullRequestUrl(pullRequests) is { } mergedPullRequestUrl)
+            {
+                return mergedPullRequestUrl;
+            }
+
+            fallbackPullRequestUrl ??= TrySelectAnyPullRequestUrl(pullRequests);
+            next = TryCreateRequestUri(page?.Next);
         }
 
-        var page = await ReadPullRequestPageAsync(response, cancellationToken).ConfigureAwait(false);
-        return TrySelectPullRequestUrl(page?.Values ?? []);
+        return fallbackPullRequestUrl;
     }
 
     private async Task<RepositoryTagPage> ReadTagPageAsync(
@@ -172,7 +186,7 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
             cancellationToken).ConfigureAwait(false);
     }
 
-    private static Uri? TrySelectPullRequestUrl(IReadOnlyList<PullRequestDto> pullRequests)
+    private static Uri? TrySelectMergedPullRequestUrl(IReadOnlyList<PullRequestDto> pullRequests)
     {
         ArgumentNullException.ThrowIfNull(pullRequests);
 
@@ -189,6 +203,13 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
             }
         }
 
+        return null;
+    }
+
+    private static Uri? TrySelectAnyPullRequestUrl(IReadOnlyList<PullRequestDto> pullRequests)
+    {
+        ArgumentNullException.ThrowIfNull(pullRequests);
+
         foreach (var pullRequest in pullRequests)
         {
             if (TryCreateAbsoluteUri(pullRequest.Links?.Html?.Href) is { } pullRequestUrl)
@@ -198,6 +219,23 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
         }
 
         return null;
+    }
+
+    private static Uri? TryCreateRequestUri(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out var absolute))
+        {
+            return absolute;
+        }
+
+        return Uri.TryCreate(value, UriKind.Relative, out var relative)
+            ? relative
+            : null;
     }
 
     private static Uri? TryCreateAbsoluteUri(string? value)
