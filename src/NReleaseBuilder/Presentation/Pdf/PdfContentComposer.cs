@@ -121,7 +121,10 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
                 _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Component.Value);
                 _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Repository.Value);
                 _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.CurrentVersion.Value);
-                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Status.ToPlainLabel());
+                table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(text =>
+                    _ = text
+                        .Span(row.Status.ToPlainLabel())
+                        .FontColor(PdfPresentationHelpers.ResolveCheckStatusHexColor(row.Status, row.NewerVersions.Count)));
             }
         });
 
@@ -191,7 +194,8 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
 
                     foreach (var version in row.NewerVersions)
                     {
-                        _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.Version.Value);
+                        table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(text =>
+                            ComposeVersionText(text, version.Version.Value, version.PullRequestUrl));
                         table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(text =>
                             ComposeJiraTaskText(text, version.JiraTask.Value, isBold: false));
                         _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(version.JiraTitle.Value);
@@ -335,7 +339,10 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
             {
                 _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Index.Value.ToString(CultureInfo.InvariantCulture));
                 _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Component.Value);
-                _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.Status.ToPlainLabel());
+                table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(text =>
+                    _ = text
+                        .Span(row.Status.ToPlainLabel())
+                        .FontColor(PdfPresentationHelpers.ResolveCheckStatusHexColor(row.Status, row.NewerVersions.Count)));
                 _ = table.Cell().Element(PdfPresentationHelpers.StylePdfBodyCell).Text(row.DetailsMessage.Value);
             }
         });
@@ -429,6 +436,21 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
                 _ = plainSpan.Bold();
             }
         }
+    }
+
+    private static void ComposeVersionText(TextDescriptor text, string versionValue, Uri? pullRequestUrl)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentException.ThrowIfNullOrWhiteSpace(versionValue);
+
+        if (pullRequestUrl is null)
+        {
+            _ = text.Span(versionValue);
+            return;
+        }
+
+        var hyperlink = text.Hyperlink(versionValue, pullRequestUrl.ToString());
+        _ = ApplyJiraHyperlinkStyle(hyperlink);
     }
 
     private void ComposeJiraAwareDetailsText(TextDescriptor text, string details)

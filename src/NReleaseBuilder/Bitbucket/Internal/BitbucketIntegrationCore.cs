@@ -115,6 +115,32 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
         return commit ?? new CommitInfo(null);
     }
 
+    /// <inheritdoc />
+    public async Task<Uri?> TryGetPullRequestUrlByCommitAsync(
+        RepositoryName repository,
+        CommitHash commitHash,
+        CancellationToken cancellationToken)
+    {
+        var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
+        var pullRequestsUrl = new Uri(
+            $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash.Value)}/pullrequests?pagelen={_bitbucketOptions.PageLen}",
+            UriKind.Relative);
+
+        using var response = await _httpRetryExecutor.GetAsync(
+            httpClient,
+            pullRequestsUrl,
+            _bitbucketOptions.RetryCount,
+            cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var page = await ReadPullRequestPageAsync(response, cancellationToken).ConfigureAwait(false);
+        return TrySelectPullRequestUrl(page?.Values ?? []);
+    }
+
     private async Task<RepositoryTagPage> ReadTagPageAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
@@ -135,6 +161,55 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
             cancellationToken).ConfigureAwait(false);
 
         return commitDto?.ToDomain();
+    }
+
+    private async Task<PullRequestPageDto?> ReadPullRequestPageAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        return await _responseSerializer.SerializeAsync<PullRequestPageDto>(
+            response,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static Uri? TrySelectPullRequestUrl(IReadOnlyList<PullRequestDto> pullRequests)
+    {
+        ArgumentNullException.ThrowIfNull(pullRequests);
+
+        foreach (var pullRequest in pullRequests)
+        {
+            if (!string.Equals(pullRequest.State, "MERGED", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryCreateAbsoluteUri(pullRequest.Links?.Html?.Href) is { } mergedPullRequestUrl)
+            {
+                return mergedPullRequestUrl;
+            }
+        }
+
+        foreach (var pullRequest in pullRequests)
+        {
+            if (TryCreateAbsoluteUri(pullRequest.Links?.Html?.Href) is { } pullRequestUrl)
+            {
+                return pullRequestUrl;
+            }
+        }
+
+        return null;
+    }
+
+    private static Uri? TryCreateAbsoluteUri(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            ? uri
+            : null;
     }
 
     private static string TrimText(string value, int maxLength)

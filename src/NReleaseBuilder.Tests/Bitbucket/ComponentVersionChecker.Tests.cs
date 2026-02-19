@@ -82,7 +82,12 @@ public class ComponentVersionCheckerTests
                         new RepositoryName("resolved-outdated-repo"),
                         [
                             CreateTag("2.0.0", "TASK-20", "Second", "In Progress"),
-                            CreateTag("1.1.0", "TASK-10", "First", "Done"),
+                            CreateTag(
+                                "1.1.0",
+                                "TASK-10",
+                                "First",
+                                "Done",
+                                new Uri("https://bitbucket.example.test/workspace/repo-outdated/pull-requests/10")),
                             CreateTag("invalid", "TASK-30", "Ignored", "Done"),
                         ]),
             };
@@ -124,8 +129,11 @@ public class ComponentVersionCheckerTests
         result[5].NewerVersions.Should().HaveCount(2);
         result[5].NewerVersions[0].Version.Value.Should().Be("1.1.0");
         result[5].NewerVersions[0].JiraTask.Value.Should().Be("TASK-10");
+        result[5].NewerVersions[0].PullRequestUrl.Should().Be(
+            new Uri("https://bitbucket.example.test/workspace/repo-outdated/pull-requests/10"));
         result[5].NewerVersions[1].Version.Value.Should().Be("2.0.0");
         result[5].NewerVersions[1].JiraTask.Value.Should().Be("TASK-20");
+        result[5].NewerVersions[1].PullRequestUrl.Should().BeNull();
     }
 
     private static ComponentRow Component(string component, string repository, string version) =>
@@ -134,7 +142,12 @@ public class ComponentVersionCheckerTests
             new RepositoryName(repository),
             new VersionLabel(version));
 
-    private static RepositoryTagInfo CreateTag(string version, string jiraTask, string jiraTitle, string jiraStatus) =>
+    private static RepositoryTagInfo CreateTag(
+        string version,
+        string jiraTask,
+        string jiraTitle,
+        string jiraStatus,
+        Uri? pullRequestUrl = null) =>
         new(
             new VersionLabel(version),
             new JiraTaskReference(jiraTask),
@@ -143,5 +156,6 @@ public class ComponentVersionCheckerTests
             [],
             hasRequiredActions: false,
             hasBreakingChanges: false,
-            hasDependencyIssues: false);
+            hasDependencyIssues: false,
+            pullRequestUrl);
 }

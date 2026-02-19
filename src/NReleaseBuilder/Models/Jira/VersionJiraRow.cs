@@ -20,6 +20,7 @@ public readonly record struct VersionJiraRow
     /// <param name="hasDependencyIssues">
     /// Whether Required Actions or Breaking changes contain links to other Jira tasks from configured projects.
     /// </param>
+    /// <param name="pullRequestUrl">Pull request URL associated with the version merge commit, when available.</param>
     public VersionJiraRow(
         VersionLabel version,
         JiraTaskReference jiraTask,
@@ -28,7 +29,8 @@ public readonly record struct VersionJiraRow
         IReadOnlyList<JiraTaskAlertDetails> taskAlertDetails,
         bool hasRequiredActions,
         bool hasBreakingChanges,
-        bool hasDependencyIssues)
+        bool hasDependencyIssues,
+        Uri? pullRequestUrl = null)
     {
         ArgumentNullException.ThrowIfNull(taskAlertDetails);
 
@@ -40,6 +42,7 @@ public readonly record struct VersionJiraRow
         HasRequiredActions = hasRequiredActions;
         HasBreakingChanges = hasBreakingChanges;
         HasDependencyIssues = hasDependencyIssues;
+        PullRequestUrl = pullRequestUrl;
     }
 
     /// <summary>
@@ -81,4 +84,9 @@ public readonly record struct VersionJiraRow
     /// Whether Required Actions or Breaking changes contain links to other Jira tasks from configured projects.
     /// </summary>
     public bool HasDependencyIssues { get; }
+
+    /// <summary>
+    /// Pull request URL associated with the version merge commit, when available.
+    /// </summary>
+    public Uri? PullRequestUrl { get; }
 }

@@ -195,6 +195,7 @@ public class BitbucketTagLookupCoreTests
         ];
         var minCurrentVersion = NuGetVersion.Parse("1.0.0");
         var commitInfo = new CommitInfo("PROJ-1 fix bug");
+        var pullRequestUrl = new Uri("https://bitbucket.example.test/workspace/service.api/pull-requests/42");
         var jiraResolution = new JiraTaskResolution(
             new JiraStatusReference("Done"),
             new JiraTaskReference("PROJ-1"),
@@ -206,6 +207,7 @@ public class BitbucketTagLookupCoreTests
         using var cts = new CancellationTokenSource();
         var integrationLoadCallCount = 0;
         var commitMessageCallCount = 0;
+        var pullRequestUrlCallCount = 0;
         var resolveCallCount = 0;
         var progressTotalDetectedCount = 0;
         var progressProcessedCount = 0;
@@ -233,6 +235,13 @@ public class BitbucketTagLookupCoreTests
                 It.Is<CancellationToken>(value => value == cts.Token)))
             .Callback(() => commitMessageCallCount++)
             .ReturnsAsync(commitInfo);
+        integrationCoreMock
+            .Setup(x => x.TryGetPullRequestUrlByCommitAsync(
+                It.Is<RepositoryName>(value => value == repository),
+                It.Is<CommitHash>(value => value == commitHash),
+                It.Is<CancellationToken>(value => value == cts.Token)))
+            .Callback(() => pullRequestUrlCallCount++)
+            .ReturnsAsync(pullRequestUrl);
 
         var jiraTaskResolverMock = new Mock<IJiraTaskResolver>(MockBehavior.Strict);
         jiraTaskResolverMock
@@ -256,6 +265,7 @@ public class BitbucketTagLookupCoreTests
         // Assert
         integrationLoadCallCount.Should().Be(1);
         commitMessageCallCount.Should().Be(1);
+        pullRequestUrlCallCount.Should().Be(1);
         resolveCallCount.Should().Be(1);
         progressTotalDetectedCount.Should().Be(1);
         progressProcessedCount.Should().Be(3);
@@ -266,12 +276,15 @@ public class BitbucketTagLookupCoreTests
         result.Tags.Should().HaveCount(3);
         result.Tags[0].Name.Value.Should().Be("1.1.0");
         result.Tags[0].JiraTask.Value.Should().Be("PROJ-1");
+        result.Tags[0].PullRequestUrl.Should().Be(pullRequestUrl);
         result.Tags[1].Name.Value.Should().Be("1.2.0");
         result.Tags[1].JiraTask.Value.Should().Be("PROJ-1");
+        result.Tags[1].PullRequestUrl.Should().Be(pullRequestUrl);
         result.Tags[2].Name.Value.Should().Be("1.3.0");
         result.Tags[2].JiraTask.Value.Should().Be("N/A");
         result.Tags[2].JiraTitle.Value.Should().Be("N/A");
         result.Tags[2].JiraStatus.Value.Should().Be("N/A");
+        result.Tags[2].PullRequestUrl.Should().BeNull();
     }
 
     private static IOptions<AppSettings> CreateOptions(bool useTruncatedFallback)

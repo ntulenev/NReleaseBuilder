@@ -1,5 +1,7 @@
 using QuestPDF.Fluent;
 
+using NReleaseBuilder.Models.Components;
+
 using QContainer = QuestPDF.Infrastructure.IContainer;
 
 namespace NReleaseBuilder.Presentation.Pdf;
@@ -60,6 +62,25 @@ internal static class PdfPresentationHelpers
             <= 2 => "#ca8a04",
             <= 5 => "#ea580c",
             _ => "#b91c1c",
+        };
+    }
+
+    /// <summary>
+    /// Resolves color for component check status in PDF output.
+    /// </summary>
+    /// <param name="status">Component check status.</param>
+    /// <param name="newerVersionCount">Count of newer versions for the component.</param>
+    /// <returns>Hex color code.</returns>
+    public static string ResolveCheckStatusHexColor(CheckStatus status, int newerVersionCount)
+    {
+        return status switch
+        {
+            CheckStatus.UpToDate => "#15803d",
+            CheckStatus.Outdated => ResolveAheadCounterHexColor(Math.Max(3, newerVersionCount)),
+            CheckStatus.RepositoryNotFound => "#b91c1c",
+            CheckStatus.BitbucketError => "#b91c1c",
+            CheckStatus.InvalidCurrentVersion => "#b91c1c",
+            _ => "#6b7280",
         };
     }
 }

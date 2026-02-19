@@ -392,6 +392,114 @@ public class BitbucketIntegrationCoreTests
         result.Message.Should().Be("feat: add background jobs");
     }
 
+    [Fact(DisplayName = "BitbucketIntegrationCore TryGetPullRequestUrlByCommitAsync returns null for non success status.")]
+    [Trait("Category", "Unit")]
+    public async Task TryGetPullRequestUrlByCommitAsyncReturnsNullForNonSuccessStatus()
+    {
+        // Arrange
+        var options = CreateOptions(pageLen: 5, retryCount: 2);
+        var repository = new RepositoryName("service.api");
+        var commitHash = new CommitHash("abc123");
+        var expectedPullRequestsUrl = "repositories/workspace/service.api/commit/abc123/pullrequests?pagelen=5";
+        var response = new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        using var httpClient = new HttpClient();
+        using var cts = new CancellationTokenSource();
+
+        var factoryMock = new Mock<IHttpClientFactory>(MockBehavior.Strict);
+        factoryMock
+            .Setup(x => x.CreateClient(It.Is<string>(value => value == HttpClientNames.BITBUCKET)))
+            .Returns(httpClient);
+
+        var retryExecutorMock = new Mock<IHttpRetryExecutor>(MockBehavior.Strict);
+        retryExecutorMock
+            .Setup(x => x.GetAsync(
+                It.Is<HttpClient>(value => ReferenceEquals(value, httpClient)),
+                It.Is<Uri>(value => value.OriginalString == expectedPullRequestsUrl),
+                It.Is<int>(value => value == 2),
+                It.Is<CancellationToken>(value => value == cts.Token)))
+            .ReturnsAsync(response);
+
+        var serializerMock = new Mock<IResponseSerializer>(MockBehavior.Strict);
+        var sut = new BitbucketIntegrationCore(factoryMock.Object, options, retryExecutorMock.Object, serializerMock.Object);
+
+        // Act
+        var result = await sut.TryGetPullRequestUrlByCommitAsync(repository, commitHash, cts.Token);
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact(DisplayName = "BitbucketIntegrationCore TryGetPullRequestUrlByCommitAsync returns merged pull request URL.")]
+    [Trait("Category", "Unit")]
+    public async Task TryGetPullRequestUrlByCommitAsyncReturnsMergedPullRequestUrl()
+    {
+        // Arrange
+        var options = CreateOptions(pageLen: 5, retryCount: 2);
+        var repository = new RepositoryName("service.api");
+        var commitHash = new CommitHash("abc123");
+        var expectedPullRequestsUrl = "repositories/workspace/service.api/commit/abc123/pullrequests?pagelen=5";
+        var response = new HttpResponseMessage(HttpStatusCode.OK);
+        var pullRequests = new PullRequestPageDto
+        {
+            Values =
+            [
+                new PullRequestDto
+                {
+                    State = "OPEN",
+                    Links = new PullRequestLinksDto
+                    {
+                        Html = new PullRequestLinkDto
+                        {
+                            Href = "https://bitbucket.example.test/workspace/service.api/pull-requests/7",
+                        },
+                    },
+                },
+                new PullRequestDto
+                {
+                    State = "MERGED",
+                    Links = new PullRequestLinksDto
+                    {
+                        Html = new PullRequestLinkDto
+                        {
+                            Href = "https://bitbucket.example.test/workspace/service.api/pull-requests/8",
+                        },
+                    },
+                },
+            ],
+        };
+        using var httpClient = new HttpClient();
+        using var cts = new CancellationTokenSource();
+
+        var factoryMock = new Mock<IHttpClientFactory>(MockBehavior.Strict);
+        factoryMock
+            .Setup(x => x.CreateClient(It.Is<string>(value => value == HttpClientNames.BITBUCKET)))
+            .Returns(httpClient);
+
+        var retryExecutorMock = new Mock<IHttpRetryExecutor>(MockBehavior.Strict);
+        retryExecutorMock
+            .Setup(x => x.GetAsync(
+                It.Is<HttpClient>(value => ReferenceEquals(value, httpClient)),
+                It.Is<Uri>(value => value.OriginalString == expectedPullRequestsUrl),
+                It.Is<int>(value => value == 2),
+                It.Is<CancellationToken>(value => value == cts.Token)))
+            .ReturnsAsync(response);
+
+        var serializerMock = new Mock<IResponseSerializer>(MockBehavior.Strict);
+        serializerMock
+            .Setup(x => x.SerializeAsync<PullRequestPageDto>(
+                It.Is<HttpResponseMessage>(value => ReferenceEquals(value, response)),
+                It.Is<CancellationToken>(value => value == cts.Token)))
+            .ReturnsAsync(pullRequests);
+
+        var sut = new BitbucketIntegrationCore(factoryMock.Object, options, retryExecutorMock.Object, serializerMock.Object);
+
+        // Act
+        var result = await sut.TryGetPullRequestUrlByCommitAsync(repository, commitHash, cts.Token);
+
+        // Assert
+        result.Should().Be(new Uri("https://bitbucket.example.test/workspace/service.api/pull-requests/8"));
+    }
+
     private static IOptions<AppSettings> CreateOptions(int pageLen, int retryCount)
     {
         var settings = new AppSettings

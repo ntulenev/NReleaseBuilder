@@ -42,6 +42,7 @@ public class RepositoryTagInfoTests
                 "Required",
                 "Breaking"),
         ];
+        var pullRequestUrl = new Uri("https://bitbucket.example.test/workspace/repo/pull-requests/10");
 
         var info = new RepositoryTagInfo(
             new VersionLabel("1.0.0"),
@@ -51,7 +52,8 @@ public class RepositoryTagInfoTests
             details,
             hasRequiredActions: true,
             hasBreakingChanges: true,
-            hasDependencyIssues: true);
+            hasDependencyIssues: true,
+            pullRequestUrl);
 
         // Act
         var version = info.Name.Value;
@@ -71,5 +73,6 @@ public class RepositoryTagInfoTests
         required.Should().BeTrue();
         breaking.Should().BeTrue();
         dependency.Should().BeTrue();
+        info.PullRequestUrl.Should().Be(pullRequestUrl);
     }
 }

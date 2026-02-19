@@ -29,4 +29,16 @@ public interface IBitbucketIntegrationCore
         RepositoryName repository,
         CommitHash commitHash,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Loads pull request URL associated with a commit hash.
+    /// </summary>
+    /// <param name="repository">Repository name used in Bitbucket API calls.</param>
+    /// <param name="commitHash">Commit hash.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Pull request URL when available; otherwise <see langword="null"/>.</returns>
+    Task<Uri?> TryGetPullRequestUrlByCommitAsync(
+        RepositoryName repository,
+        CommitHash commitHash,
+        CancellationToken cancellationToken);
 }

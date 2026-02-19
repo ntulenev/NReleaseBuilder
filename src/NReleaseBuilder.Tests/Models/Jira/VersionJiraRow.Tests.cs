@@ -42,6 +42,7 @@ public class VersionJiraRowTests
                 null,
                 null),
         ];
+        var pullRequestUrl = new Uri("https://bitbucket.example.test/workspace/repo/pull-requests/11");
 
         var row = new VersionJiraRow(
             new VersionLabel("1.1.0"),
@@ -51,7 +52,8 @@ public class VersionJiraRowTests
             details,
             hasRequiredActions: true,
             hasBreakingChanges: false,
-            hasDependencyIssues: true);
+            hasDependencyIssues: true,
+            pullRequestUrl);
 
         // Act
         var version = row.Version.Value;
@@ -68,5 +70,6 @@ public class VersionJiraRowTests
         row.HasRequiredActions.Should().BeTrue();
         row.HasBreakingChanges.Should().BeFalse();
         row.HasDependencyIssues.Should().BeTrue();
+        row.PullRequestUrl.Should().Be(pullRequestUrl);
     }
 }

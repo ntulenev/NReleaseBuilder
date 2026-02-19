@@ -104,6 +104,7 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
         CancellationToken cancellationToken)
     {
         var jiraCacheByCommit = new Dictionary<string, JiraTaskResolution>(StringComparer.OrdinalIgnoreCase);
+        var pullRequestUrlCacheByCommit = new Dictionary<string, Uri?>(StringComparer.OrdinalIgnoreCase);
         var enrichedTags = new List<RepositoryTagInfo>(tagsToInspect.Length);
 
         foreach (var tag in tagsToInspect)
@@ -114,6 +115,11 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
                 tag.CommitHash,
                 jiraCacheByCommit,
                 cancellationToken).ConfigureAwait(false);
+            var pullRequestUrl = await ResolvePullRequestUrlAsync(
+                repositoryForBitbucketCalls,
+                tag.CommitHash,
+                pullRequestUrlCacheByCommit,
+                cancellationToken).ConfigureAwait(false);
 
             enrichedTags.Add(new RepositoryTagInfo(
                 tag.Name,
@@ -123,7 +129,8 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
                 jiraResolution.TaskAlertDetails,
                 jiraResolution.HasRequiredActions,
                 jiraResolution.HasBreakingChanges,
-                jiraResolution.HasDependencyIssues));
+                jiraResolution.HasDependencyIssues,
+                pullRequestUrl));
             progress?.CommitProcessed?.Invoke(sourceRepository.Value);
         }
 
@@ -160,6 +167,31 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
         jiraCacheByCommit[commitHash.Value.Value] = jiraResolution;
 
         return jiraResolution;
+    }
+
+    private async Task<Uri?> ResolvePullRequestUrlAsync(
+        RepositoryName repositoryForBitbucketCalls,
+        CommitHash? commitHash,
+        Dictionary<string, Uri?> pullRequestUrlCacheByCommit,
+        CancellationToken cancellationToken)
+    {
+        if (commitHash is null)
+        {
+            return null;
+        }
+
+        if (pullRequestUrlCacheByCommit.TryGetValue(commitHash.Value.Value, out var pullRequestUrl))
+        {
+            return pullRequestUrl;
+        }
+
+        pullRequestUrl = await _bitbucketIntegrationCore.TryGetPullRequestUrlByCommitAsync(
+            repositoryForBitbucketCalls,
+            commitHash.Value,
+            cancellationToken).ConfigureAwait(false);
+
+        pullRequestUrlCacheByCommit[commitHash.Value.Value] = pullRequestUrl;
+        return pullRequestUrl;
     }
 
     private static RepositoryTagLookup? TryBuildFailedTagLookup(

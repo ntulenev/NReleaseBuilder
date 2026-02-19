@@ -190,6 +190,52 @@ public class PdfContentComposerTests
         pdfText.Should().Contain("https://jira.example.test/browse/APP-2");
     }
 
+    [Fact(DisplayName = "PdfContentComposer ComposeContent renders version links when pull request URL is available.")]
+    [Trait("Category", "Unit")]
+    public void ComposeContentRendersVersionLinksWhenPullRequestUrlIsAvailable()
+    {
+        // Arrange
+        var sut = new PdfContentComposer();
+        var pullRequestUrl = new Uri("https://bitbucket.example.test/workspace/repo-api/pull-requests/77");
+        var rows =
+            new[]
+            {
+                CreateRow(
+                    1,
+                    "api",
+                    "repo-api",
+                    "1.0.0",
+                    CheckStatus.Outdated,
+                    "Has newer versions",
+                    [
+                        CreateVersion(
+                            "1.1.0",
+                            "APP-1",
+                            "Task title",
+                            "Done",
+                            hasRequiredActions: false,
+                            hasBreakingChanges: false,
+                            hasDependencyIssues: false,
+                            requiredActionsDetails: null,
+                            breakingChangesDetails: null,
+                            pullRequestUrl),
+                    ]),
+            };
+        var allowedStatuses = new[] { new JiraStatusName("Done") };
+        IReadOnlyDictionary<JiraStatusName, int> statusStatistics = new Dictionary<JiraStatusName, int>
+        {
+            [new JiraStatusName("Done")] = 1,
+        };
+
+        // Act
+        var pdfBytes = GeneratePdf(column =>
+            sut.ComposeContent(column, rows, allowedStatuses, statusStatistics));
+        var pdfText = Encoding.ASCII.GetString(pdfBytes);
+
+        // Assert
+        pdfText.Should().Contain("/URI (https://bitbucket.example.test/workspace/repo-api/pull-requests/77)");
+    }
+
     [Fact(DisplayName = "PdfContentComposer ComposeContent renders Jira links in BC or RA details.")]
     [Trait("Category", "Unit")]
     public void ComposeContentRendersJiraLinksInBcOrRaDetails()
@@ -279,7 +325,8 @@ public class PdfContentComposerTests
         bool hasBreakingChanges,
         bool hasDependencyIssues,
         string? requiredActionsDetails,
-        string? breakingChangesDetails) =>
+        string? breakingChangesDetails,
+        Uri? pullRequestUrl = null) =>
         new(
             new VersionLabel(version),
             new JiraTaskReference(jiraTask),
@@ -295,7 +342,8 @@ public class PdfContentComposerTests
             ],
             hasRequiredActions,
             hasBreakingChanges,
-            hasDependencyIssues);
+            hasDependencyIssues,
+            pullRequestUrl);
 
     private static AppSettings CreateAppSettings(string jiraBaseUrl) =>
         new()

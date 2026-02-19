@@ -1,5 +1,6 @@
 using FluentAssertions;
 
+using NReleaseBuilder.Models.Components;
 using NReleaseBuilder.Presentation.Pdf;
 
 using QuestPDF.Fluent;
@@ -26,6 +27,28 @@ public class PdfPresentationHelpersTests
         low.Should().Be("#ca8a04");
         medium.Should().Be("#ea580c");
         high.Should().Be("#b91c1c");
+    }
+
+    [Fact(DisplayName = "PdfPresentationHelpers ResolveCheckStatusHexColor returns expected status colors.")]
+    [Trait("Category", "Unit")]
+    public void ResolveCheckStatusHexColorReturnsExpectedStatusColors()
+    {
+        // Arrange
+        var unknownStatus = (CheckStatus)999;
+
+        // Act
+        var upToDate = PdfPresentationHelpers.ResolveCheckStatusHexColor(CheckStatus.UpToDate, newerVersionCount: 0);
+        var outdatedLow = PdfPresentationHelpers.ResolveCheckStatusHexColor(CheckStatus.Outdated, newerVersionCount: 1);
+        var outdatedHigh = PdfPresentationHelpers.ResolveCheckStatusHexColor(CheckStatus.Outdated, newerVersionCount: 6);
+        var notFound = PdfPresentationHelpers.ResolveCheckStatusHexColor(CheckStatus.RepositoryNotFound, newerVersionCount: 0);
+        var unknown = PdfPresentationHelpers.ResolveCheckStatusHexColor(unknownStatus, newerVersionCount: 0);
+
+        // Assert
+        upToDate.Should().Be("#15803d");
+        outdatedLow.Should().Be("#ea580c");
+        outdatedHigh.Should().Be("#b91c1c");
+        notFound.Should().Be("#b91c1c");
+        unknown.Should().Be("#6b7280");
     }
 
     [Fact(DisplayName = "PdfPresentationHelpers style helpers can be applied during PDF generation.")]

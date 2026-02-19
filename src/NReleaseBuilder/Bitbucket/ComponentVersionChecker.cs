@@ -94,7 +94,8 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     x.Tag.TaskAlertDetails,
                     x.Tag.HasRequiredActions,
                     x.Tag.HasBreakingChanges,
-                    x.Tag.HasDependencyIssues))
+                    x.Tag.HasDependencyIssues,
+                    x.Tag.PullRequestUrl))
                 .ToArray();
 
             if (newerVersions.Length == 0)
