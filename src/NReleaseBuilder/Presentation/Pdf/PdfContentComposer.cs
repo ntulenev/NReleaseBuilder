@@ -160,7 +160,8 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
                             row.Index.Value,
                             row.Component.Value,
                             row.Repository.Value))
-                    .Bold();
+                    .Bold()
+                    .FontSize(11);
 
                 _ = details
                     .Item()
