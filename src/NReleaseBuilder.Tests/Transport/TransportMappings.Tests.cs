@@ -223,6 +223,74 @@ public class TransportMappingsTests
         result.BreakingChangesDetails.Should().Be($"Change one{Environment.NewLine}Change two");
     }
 
+    [Fact(DisplayName = "TransportMappings ToDomain for JiraIssueStatusResponseDto ignores empty Atlassian document metadata in custom fields.")]
+    [Trait("Category", "Unit")]
+    public void ToDomainJiraIssueIgnoresEmptyAtlassianDocumentMetadataInCustomFields()
+    {
+        // Arrange
+        var dto = new JiraIssueStatusResponseDto
+        {
+            Fields = new JiraIssueFieldsDto
+            {
+                Status = new JiraStatusDto
+                {
+                    Name = "Done",
+                },
+                Summary = "Release fix",
+                AdditionalFields = new Dictionary<string, JsonElement>
+                {
+                    ["customfield_10010"] = JsonElementFrom(/*lang=json,strict*/ "{\"type\":\"doc\",\"version\":1}"),
+                    ["customfield_10020"] = JsonElementFrom(/*lang=json,strict*/ "{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[]}]}"),
+                },
+            },
+            Names = new Dictionary<string, string?>
+            {
+                ["customfield_10010"] = "Required Actions",
+                ["customfield_10020"] = "Breaking Changes",
+            },
+        };
+
+        // Act
+        var result = dto.ToDomain("Required Actions", "Breaking Changes");
+
+        // Assert
+        result.RequiredActionsDetails.Should().BeNull();
+        result.BreakingChangesDetails.Should().BeNull();
+    }
+
+    [Fact(DisplayName = "TransportMappings ToDomain for JiraIssueStatusResponseDto reads Atlassian document text content.")]
+    [Trait("Category", "Unit")]
+    public void ToDomainJiraIssueReadsAtlassianDocumentTextContent()
+    {
+        // Arrange
+        var dto = new JiraIssueStatusResponseDto
+        {
+            Fields = new JiraIssueFieldsDto
+            {
+                Status = new JiraStatusDto
+                {
+                    Name = "Done",
+                },
+                Summary = "Release fix",
+                AdditionalFields = new Dictionary<string, JsonElement>
+                {
+                    ["customfield_10010"] = JsonElementFrom(
+                        /*lang=json,strict*/ "{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\" Step one \"}]},{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Step two\"}]}]}"),
+                },
+            },
+            Names = new Dictionary<string, string?>
+            {
+                ["customfield_10010"] = "Required Actions",
+            },
+        };
+
+        // Act
+        var result = dto.ToDomain("Required Actions", "Breaking Changes");
+
+        // Assert
+        result.RequiredActionsDetails.Should().Be($"Step one{Environment.NewLine}Step two");
+    }
+
     [Fact(DisplayName = "TransportMappings ToDomain for JiraIssueStatusResponseDto uses defaults when status and summary are missing.")]
     [Trait("Category", "Unit")]
     public void ToDomainJiraIssueUsesDefaultsWhenStatusAndSummaryAreMissing()

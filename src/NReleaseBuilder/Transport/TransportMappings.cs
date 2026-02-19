@@ -194,6 +194,7 @@ public static class TransportMappings
     private static void AppendObjectFieldText(JsonElement fieldValue, List<string> lines)
     {
         var linesBefore = lines.Count;
+        var isLikelyAtlassianDocumentNode = IsLikelyAtlassianDocumentNode(fieldValue);
 
         if (fieldValue.TryGetProperty("text", out var textValue))
         {
@@ -210,6 +211,11 @@ public static class TransportMappings
             AppendJsonFieldText(contentValue, lines);
         }
 
+        if (fieldValue.TryGetProperty("attrs", out var attrsValue))
+        {
+            AppendAttributesFieldText(attrsValue, lines);
+        }
+
         if (lines.Count > linesBefore)
         {
             return;
@@ -217,6 +223,11 @@ public static class TransportMappings
 
         foreach (var property in fieldValue.EnumerateObject())
         {
+            if (ShouldSkipObjectTraversalProperty(property.Name, isLikelyAtlassianDocumentNode))
+            {
+                continue;
+            }
+
             AppendJsonFieldText(property.Value, lines);
         }
 
@@ -225,7 +236,11 @@ public static class TransportMappings
             return;
         }
 
-        AppendLine(lines, fieldValue.GetRawText());
+        // Do not emit raw Atlassian document metadata like {"type":"doc","version":1}.
+        if (!isLikelyAtlassianDocumentNode)
+        {
+            AppendLine(lines, fieldValue.GetRawText());
+        }
     }
 
     private static void AppendArrayFieldText(JsonElement fieldValue, List<string> lines)
@@ -242,6 +257,71 @@ public static class TransportMappings
         {
             lines.Add(value.Trim());
         }
+    }
+
+    private static void AppendAttributesFieldText(JsonElement attrsValue, List<string> lines)
+    {
+        if (attrsValue.ValueKind != JsonValueKind.Object)
+        {
+            AppendJsonFieldText(attrsValue, lines);
+            return;
+        }
+
+        if (attrsValue.TryGetProperty("text", out var textValue))
+        {
+            AppendJsonFieldText(textValue, lines);
+        }
+
+        if (attrsValue.TryGetProperty("label", out var labelValue))
+        {
+            AppendJsonFieldText(labelValue, lines);
+        }
+
+        if (attrsValue.TryGetProperty("title", out var titleValue))
+        {
+            AppendJsonFieldText(titleValue, lines);
+        }
+
+        if (attrsValue.TryGetProperty("value", out var valueValue))
+        {
+            AppendJsonFieldText(valueValue, lines);
+        }
+
+        if (attrsValue.TryGetProperty("url", out var urlValue))
+        {
+            AppendJsonFieldText(urlValue, lines);
+        }
+
+        if (attrsValue.TryGetProperty("href", out var hrefValue))
+        {
+            AppendJsonFieldText(hrefValue, lines);
+        }
+    }
+
+    private static bool IsLikelyAtlassianDocumentNode(JsonElement fieldValue)
+    {
+        if (fieldValue.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        return fieldValue.TryGetProperty("type", out _)
+            || fieldValue.TryGetProperty("version", out _);
+    }
+
+    private static bool ShouldSkipObjectTraversalProperty(string propertyName, bool isLikelyAtlassianDocumentNode)
+    {
+        if (propertyName is "text" or "value" or "content" or "attrs")
+        {
+            return true;
+        }
+
+        if (!isLikelyAtlassianDocumentNode)
+        {
+            return false;
+        }
+
+        return propertyName is "type" or "version" or "marks";
     }
 
     private static bool HasMeaningfulJsonValue(JsonElement fieldValue)
