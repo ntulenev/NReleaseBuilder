@@ -224,6 +224,15 @@ sample-worker,registry.invalid/moonlight.task.runner:2.4.0
 Only `container` and `image` are required.
 
 ## Output
-The utility supports console, PDF, and Excel output.
 
-![Example output](RBuilder.png)
+>For demonstration purposes, the program output shown in the screenshots uses synthetic data to avoid exposing information from real Jira issues and users.
+
+### Console
+<img src="Release_1.png" alt="Output part 1">
+<img src="Release_2.png" alt="Output part 2">
+
+### PDF
+<img src="Release_3.png" alt="Output part 3">
+
+### Excel
+<img src="Release_4.png" alt="Output part 4">
