@@ -1,22 +1,39 @@
-using System.Globalization;
-
-using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Spreadsheet;
-
 using FluentAssertions;
 
 using Microsoft.Extensions.Options;
 
+using Moq;
+
+using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 using NReleaseBuilder.Models.Jira;
+using NReleaseBuilder.Models.Rendering;
 using NReleaseBuilder.Presentation.Excel;
 
 namespace NReleaseBuilder.Tests.Presentation.Excel;
 
 public class MiniExcelReportRendererTests
 {
+    [Fact(DisplayName = "MiniExcelReportRenderer can be created.")]
+    [Trait("Category", "Unit")]
+    public void MiniExcelReportRendererCanBeCreated()
+    {
+        // Arrange
+        var settings = CreateSettings("reports", excelEnabled: true);
+        var options = Options.Create(settings);
+        var composer = new Mock<IExcelContentComposer>(MockBehavior.Strict).Object;
+        var fileStore = new Mock<IExcelReportFileStore>(MockBehavior.Strict).Object;
+        var formatter = new Mock<IWorkbookFormatter>(MockBehavior.Strict).Object;
+
+        // Act
+        var exception = Record.Exception(() => _ = new MiniExcelReportRenderer(options, composer, fileStore, formatter));
+
+        // Assert
+        exception.Should().BeNull();
+    }
+
     [Fact(DisplayName = "MiniExcelReportRenderer skips rendering when Excel is disabled.")]
     [Trait("Category", "Unit")]
     public void RenderReportSkipsRenderingWhenExcelIsDisabled()
@@ -24,81 +41,128 @@ public class MiniExcelReportRendererTests
         // Arrange
         var tempDirectory = CreateTempDirectoryPath();
         var settings = CreateSettings(tempDirectory, excelEnabled: false);
-        var sut = new MiniExcelReportRenderer(Options.Create(settings));
-        var rows = new[] { CreateRow() };
-        var statuses = new[] { new JiraStatusName("Done") };
-        IReadOnlyDictionary<JiraStatusName, int> statistics = new Dictionary<JiraStatusName, int>
-        {
-            [new JiraStatusName("Done")] = 1,
-        };
+        var composer = new Mock<IExcelContentComposer>(MockBehavior.Strict).Object;
+        var fileStore = new Mock<IExcelReportFileStore>(MockBehavior.Strict).Object;
+        var formatter = new Mock<IWorkbookFormatter>(MockBehavior.Strict).Object;
+        var sut = new MiniExcelReportRenderer(Options.Create(settings), composer, fileStore, formatter);
 
         // Act
-        sut.RenderReport(rows, statuses, statistics);
+        sut.RenderReport([CreateRow()], [new JiraStatusName("Done")], CreateStatistics());
 
         // Assert
         Directory.Exists(tempDirectory).Should().BeFalse();
     }
 
-    [Fact(DisplayName = "MiniExcelReportRenderer creates summary and component sheets with links and alert sections.")]
-    [Trait("Category", "Integration")]
-    public void RenderReportCreatesWorkbookWithExpectedSheetsAndLinks()
+    [Fact(DisplayName = "MiniExcelReportRenderer RenderReport validates null arguments.")]
+    [Trait("Category", "Unit")]
+    public void RenderReportValidatesNullArguments()
     {
         // Arrange
-        using var tempDirectory = new TempDirectory();
-        var settings = CreateSettings(tempDirectory.Path, excelEnabled: true);
-        var sut = new MiniExcelReportRenderer(Options.Create(settings));
+        var settings = CreateSettings("reports", excelEnabled: false);
+        var composer = new Mock<IExcelContentComposer>(MockBehavior.Strict).Object;
+        var fileStore = new Mock<IExcelReportFileStore>(MockBehavior.Strict).Object;
+        var formatter = new Mock<IWorkbookFormatter>(MockBehavior.Strict).Object;
+        var sut = new MiniExcelReportRenderer(Options.Create(settings), composer, fileStore, formatter);
+
+        // Act
+        Action nullRows = () => sut.RenderReport(null!, [], CreateStatistics());
+        Action nullStatuses = () => sut.RenderReport([], null!, CreateStatistics());
+        Action nullStatistics = () => sut.RenderReport([], [], null!);
+
+        // Assert
+        nullRows.Should().Throw<ArgumentNullException>()
+            .WithParameterName("rows");
+        nullStatuses.Should().Throw<ArgumentNullException>()
+            .WithParameterName("allowedStatuses");
+        nullStatistics.Should().Throw<ArgumentNullException>()
+            .WithParameterName("statusStatistics");
+    }
+
+    [Fact(DisplayName = "MiniExcelReportRenderer composes formats and delegates workbook persistence when Excel is enabled.")]
+    [Trait("Category", "Unit")]
+    public void RenderReportComposesFormatsAndDelegatesWorkbookPersistenceWhenExcelIsEnabled()
+    {
+        // Arrange
+        var settings = CreateSettings("reports", excelEnabled: true);
         var rows = new[] { CreateRow() };
         var statuses = new[] { new JiraStatusName("Done") };
-        IReadOnlyDictionary<JiraStatusName, int> statistics = new Dictionary<JiraStatusName, int>
-        {
-            [new JiraStatusName("Done")] = 1,
-        };
+        var statistics = CreateStatistics();
+        var expectedOutputPath = settings.Excel.ResolveOutputPath();
+        var workbookData = CreateWorkbookData();
+        using var workbookStream = new ExcelReportFileStore(Options.Create(settings)).CreateWorkbookStream(workbookData.Sheets);
 
-        var dateSuffix = DateTime.Now.ToString("dd_MM_yyyy", CultureInfo.InvariantCulture);
-        var expectedOutputPath = Path.Combine(tempDirectory.Path, $"report_{dateSuffix}.xlsx");
+        var composeCalls = 0;
+        var createWorkbookStreamCalls = 0;
+        var formatCalls = 0;
+        var saveCalls = 0;
+
+        var composerMock = new Mock<IExcelContentComposer>(MockBehavior.Strict);
+        composerMock
+            .Setup(x => x.ComposeWorkbook(
+                It.Is<ComponentCheckRow[]>(inputRows => ReferenceEquals(inputRows, rows)),
+                It.Is<JiraStatusName[]>(inputStatuses => ReferenceEquals(inputStatuses, statuses)),
+                It.Is<IReadOnlyDictionary<JiraStatusName, int>>(inputStatistics => ReferenceEquals(inputStatistics, statistics))))
+            .Callback(() => composeCalls++)
+            .Returns(workbookData);
+
+        var fileStoreMock = new Mock<IExcelReportFileStore>(MockBehavior.Strict);
+        fileStoreMock
+            .Setup(x => x.CreateWorkbookStream(
+                It.Is<IReadOnlyDictionary<string, object>>(sheets => ReferenceEquals(sheets, workbookData.Sheets))))
+            .Callback(() => createWorkbookStreamCalls++)
+            .Returns(workbookStream);
+        fileStoreMock
+            .Setup(x => x.Save(
+                It.Is<Stream>(stream => ReferenceEquals(stream, workbookStream))))
+            .Callback(() => saveCalls++)
+            .Returns(expectedOutputPath);
+
+        var formatterMock = new Mock<IWorkbookFormatter>(MockBehavior.Strict);
+        formatterMock
+            .Setup(x => x.Format(
+                It.Is<Stream>(stream => ReferenceEquals(stream, workbookStream)),
+                It.Is<IReadOnlyDictionary<string, ExcelSheetLayout>>(layouts => ReferenceEquals(layouts, workbookData.Layouts))))
+            .Callback(() => formatCalls++);
+
+        var sut = new MiniExcelReportRenderer(Options.Create(settings), composerMock.Object, fileStoreMock.Object, formatterMock.Object);
 
         // Act
         sut.RenderReport(rows, statuses, statistics);
 
         // Assert
-        File.Exists(expectedOutputPath).Should().BeTrue();
-
-        using var workbook = SpreadsheetDocument.Open(expectedOutputPath, false);
-        var workbookPart = workbook.WorkbookPart;
-        workbookPart.Should().NotBeNull();
-        var workbookRoot = workbookPart!.Workbook;
-        workbookRoot.Should().NotBeNull();
-
-        var sheets = workbookRoot!.Sheets!.OfType<Sheet>().ToArray();
-
-        sheets.Should().HaveCount(2);
-        sheets.Select(static sheet => sheet.Name!.Value).Should().Contain("Summary");
-        sheets.Select(static sheet => sheet.Name!.Value).Should().ContainSingle(name => name.Contains("component-api", StringComparison.OrdinalIgnoreCase));
-
-        var summarySheet = sheets.Single(sheet => string.Equals(sheet.Name!.Value, "Summary", StringComparison.Ordinal));
-        var summaryWorksheetPart = (WorksheetPart)workbookPart.GetPartById(summarySheet.Id!);
-        GetCellText(workbookPart, summaryWorksheetPart, "A1").Should().Be("Components Version Check");
-        GetCellText(workbookPart, summaryWorksheetPart, "A7").Should().Be("Results");
-        GetCellText(workbookPart, summaryWorksheetPart, "A11").Should().Be("Unique Jira Tasks By Status");
-
-        var componentSheet = sheets.Single(sheet => !string.Equals(sheet.Name!.Value, "Summary", StringComparison.Ordinal));
-        var componentWorksheetPart = (WorksheetPart)workbookPart.GetPartById(componentSheet.Id!);
-
-        GetCellText(workbookPart, componentWorksheetPart, "A1").Should().Be("1. component-api");
-        GetCellText(workbookPart, componentWorksheetPart, "A7").Should().Be("Newer Versions");
-        GetCellText(workbookPart, componentWorksheetPart, "E8").Should().Be("Alerts");
-        GetAllCellTexts(workbookPart, componentWorksheetPart).Should().Contain("Breaking Changes");
-        GetAllCellTexts(workbookPart, componentWorksheetPart).Should().Contain("Required Actions");
-
-        var componentWorksheet = componentWorksheetPart.Worksheet;
-        componentWorksheet.Should().NotBeNull();
-        componentWorksheet!.Descendants<Hyperlink>().Should().HaveCountGreaterOrEqualTo(3);
-
-        var commentsPart = componentWorksheetPart.WorksheetCommentsPart;
-        commentsPart.Should().NotBeNull();
-        commentsPart!.Comments.Should().NotBeNull();
-        commentsPart.Comments!.Descendants<Comment>().Should().HaveCount(2);
+        composeCalls.Should().Be(1);
+        createWorkbookStreamCalls.Should().Be(1);
+        formatCalls.Should().Be(1);
+        saveCalls.Should().Be(1);
     }
+
+    private static ExcelWorkbookData CreateWorkbookData()
+    {
+        var rows = new List<Dictionary<string, object?>>
+        {
+            new(StringComparer.Ordinal)
+            {
+                ["C1"] = "Components Version Check",
+            },
+        };
+
+        var layout = new ExcelSheetLayout("Summary");
+        return new ExcelWorkbookData(
+            new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["Summary"] = rows,
+            },
+            new Dictionary<string, ExcelSheetLayout>(StringComparer.Ordinal)
+            {
+                ["Summary"] = layout,
+            });
+    }
+
+    private static Dictionary<JiraStatusName, int> CreateStatistics() =>
+        new()
+        {
+            [new JiraStatusName("Done")] = 1,
+        };
 
     private static AppSettings CreateSettings(string outputDirectory, bool excelEnabled) =>
         new()
@@ -134,93 +198,16 @@ public class MiniExcelReportRendererTests
             },
         };
 
-    private static ComponentCheckRow CreateRow()
-    {
-        var jiraTask = new JiraTaskReference("APP-42");
-        var jiraStatus = new JiraStatusReference("Done");
-        var jiraTitle = new JiraTitleReference("Improve release report");
-
-        var version = new VersionJiraRow(
-            new VersionLabel("2.0.0"),
-            jiraTask,
-            jiraTitle,
-            jiraStatus,
-            [
-                new JiraTaskAlertDetails(
-                    jiraTask,
-                    jiraTitle,
-                    jiraStatus,
-                    "Review deployment steps for APP-42",
-                    "Breaking change details in https://jira.example.test/browse/APP-42"),
-            ],
-            hasRequiredActions: true,
-            hasBreakingChanges: true,
-            hasDependencyIssues: true,
-            pullRequestUrl: new Uri("https://bitbucket.example.test/projects/PROJ/repos/repo/pull-requests/42"));
-
-        return new ComponentCheckRow(
+    private static ComponentCheckRow CreateRow() =>
+        new(
             new ComponentCheckIndex(1),
             new ComponentName("component-api"),
             new RepositoryName("repo-api"),
             new VersionLabel("1.0.0"),
             CheckStatus.Outdated,
             new RowDetails("-"),
-            [version]);
-    }
-
-    private static string GetCellText(WorkbookPart workbookPart, WorksheetPart worksheetPart, string cellReference)
-    {
-        var worksheet = worksheetPart.Worksheet;
-        worksheet.Should().NotBeNull();
-
-        var cell = worksheet!.Descendants<Cell>()
-            .Single(c => string.Equals(c.CellReference!.Value, cellReference, StringComparison.OrdinalIgnoreCase));
-
-        return ResolveCellValue(workbookPart, cell);
-    }
-
-    private static string[] GetAllCellTexts(WorkbookPart workbookPart, WorksheetPart worksheetPart) =>
-    [
-        .. worksheetPart.Worksheet!.Descendants<Cell>()
-            .Select(cell => ResolveCellValue(workbookPart, cell))
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
-    ];
-
-    private static string ResolveCellValue(WorkbookPart workbookPart, Cell cell)
-    {
-        var rawValue = cell.CellValue?.Text ?? string.Empty;
-        if (cell.DataType?.Value != CellValues.SharedString)
-        {
-            return rawValue;
-        }
-
-        var sharedStringPart = workbookPart.SharedStringTablePart;
-        sharedStringPart.Should().NotBeNull();
-        sharedStringPart!.SharedStringTable.Should().NotBeNull();
-        return sharedStringPart.SharedStringTable!
-            .ElementAt(int.Parse(rawValue, CultureInfo.InvariantCulture))
-            .InnerText;
-    }
+            []);
 
     private static string CreateTempDirectoryPath() =>
         Path.Combine(Path.GetTempPath(), $"nrb-excel-tests-{Guid.NewGuid():N}");
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = CreateTempDirectoryPath();
-            _ = Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-            {
-                Directory.Delete(Path, recursive: true);
-            }
-        }
-    }
 }

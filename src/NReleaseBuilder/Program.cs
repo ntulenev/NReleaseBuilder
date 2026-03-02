@@ -71,6 +71,9 @@ builder.Services.AddTransient<IRepositoryTagLookupBatchLoader, RepositoryTagLook
 builder.Services.AddTransient<IComponentVersionChecker, ComponentVersionChecker>();
 builder.Services.AddTransient<IJiraStatusStatisticsBuilder, JiraStatusStatisticsBuilder>();
 builder.Services.AddTransient<IConsoleOutputRenderer, SpectreConsoleOutputRenderer>();
+builder.Services.AddTransient<IExcelContentComposer, MiniExcelContentComposer>();
+builder.Services.AddTransient<IExcelReportFileStore, ExcelReportFileStore>();
+builder.Services.AddTransient<IWorkbookFormatter, OpenXmlWorkbookFormatter>();
 builder.Services.AddTransient<IExcelReportRenderer, MiniExcelReportRenderer>();
 builder.Services.AddTransient<IPdfContentComposer, PdfContentComposer>();
 builder.Services.AddTransient<IPdfReportFileStore, PdfReportFileStore>();
