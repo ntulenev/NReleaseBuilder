@@ -349,6 +349,88 @@ public class AppSettingsValidatorTests
         result.Succeeded.Should().BeTrue();
     }
 
+    [Fact(DisplayName = "AppSettingsValidator Validate fails when excel section is missing.")]
+    [Trait("Category", "Unit")]
+    public void ValidateFailsWhenExcelSectionIsMissing()
+    {
+        // Arrange
+        using var csvFile = CreateTempCsvFile();
+        var sut = new AppSettingsValidator();
+        var settings = new AppSettings
+        {
+            CsvFilePath = csvFile.Path,
+            CsvComponentNamesFilter = ["api"],
+            Bitbucket = CreateValidBitbucketOptions(),
+            Jira = CreateValidJiraOptions(),
+            Pdf = CreateValidPdfOptions(),
+            Excel = null!,
+        };
+
+        // Act
+        var result = sut.Validate(null, settings);
+
+        // Assert
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain("Excel section is missing in appsettings.json.");
+    }
+
+    [Fact(DisplayName = "AppSettingsValidator Validate fails when excel output path is empty and excel enabled.")]
+    [Trait("Category", "Unit")]
+    public void ValidateFailsWhenExcelOutputPathIsEmptyAndExcelEnabled()
+    {
+        // Arrange
+        using var csvFile = CreateTempCsvFile();
+        var sut = new AppSettingsValidator();
+        var settings = new AppSettings
+        {
+            CsvFilePath = csvFile.Path,
+            CsvComponentNamesFilter = ["api"],
+            Bitbucket = CreateValidBitbucketOptions(),
+            Jira = CreateValidJiraOptions(),
+            Pdf = CreateValidPdfOptions(),
+            Excel = new ExcelOptions
+            {
+                Enabled = true,
+                OutputPath = " ",
+            },
+        };
+
+        // Act
+        var result = sut.Validate(null, settings);
+
+        // Assert
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain("Excel.OutputPath is required when Excel.Enabled is true.");
+    }
+
+    [Fact(DisplayName = "AppSettingsValidator Validate allows empty excel output path when excel disabled.")]
+    [Trait("Category", "Unit")]
+    public void ValidateAllowsEmptyExcelOutputPathWhenExcelDisabled()
+    {
+        // Arrange
+        using var csvFile = CreateTempCsvFile();
+        var sut = new AppSettingsValidator();
+        var settings = new AppSettings
+        {
+            CsvFilePath = csvFile.Path,
+            CsvComponentNamesFilter = ["api"],
+            Bitbucket = CreateValidBitbucketOptions(),
+            Jira = CreateValidJiraOptions(),
+            Pdf = CreateValidPdfOptions(),
+            Excel = new ExcelOptions
+            {
+                Enabled = false,
+                OutputPath = " ",
+            },
+        };
+
+        // Act
+        var result = sut.Validate(null, settings);
+
+        // Assert
+        result.Succeeded.Should().BeTrue();
+    }
+
     private static AppSettings CreateValidSettings(string csvPath) =>
         new()
         {

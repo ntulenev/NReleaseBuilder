@@ -23,6 +23,7 @@ public class GeneralFacadeRendererTests
     {
         // Arrange
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
         var settings = CreateSettings();
@@ -36,7 +37,7 @@ public class GeneralFacadeRendererTests
 
         // Act
         var exception = Record.Exception(() =>
-            new GeneralFacadeRenderer(consoleRenderer, pdfRenderer, statusStatisticsBuilder, optionsMock.Object));
+            new GeneralFacadeRenderer(consoleRenderer, excelRenderer, pdfRenderer, statusStatisticsBuilder, optionsMock.Object));
 
         // Assert
         exception.Should().BeNull();
@@ -48,16 +49,35 @@ public class GeneralFacadeRendererTests
     public void GeneralFacadeRendererCantBeCreatedWithNullConsoleRenderer()
     {
         // Arrange
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
         var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(null!, pdfRenderer, statusStatisticsBuilder, options);
+        Action action = () => _ = new GeneralFacadeRenderer(null!, excelRenderer, pdfRenderer, statusStatisticsBuilder, options);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
             .WithParameterName("consoleRenderer");
+    }
+
+    [Fact(DisplayName = "GeneralFacadeRenderer cant be created with null excel renderer.")]
+    [Trait("Category", "Unit")]
+    public void GeneralFacadeRendererCantBeCreatedWithNullExcelRenderer()
+    {
+        // Arrange
+        var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
+        var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
+        var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
+
+        // Act
+        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, null!, pdfRenderer, statusStatisticsBuilder, options);
+
+        // Assert
+        action.Should().Throw<ArgumentNullException>()
+            .WithParameterName("excelReportRenderer");
     }
 
     [Fact(DisplayName = "GeneralFacadeRenderer cant be created with null pdf renderer.")]
@@ -66,11 +86,12 @@ public class GeneralFacadeRendererTests
     {
         // Arrange
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
         var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, null!, statusStatisticsBuilder, options);
+        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, excelRenderer, null!, statusStatisticsBuilder, options);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -83,11 +104,12 @@ public class GeneralFacadeRendererTests
     {
         // Arrange
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
         var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, pdfRenderer, null!, options);
+        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, excelRenderer, pdfRenderer, null!, options);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -100,11 +122,12 @@ public class GeneralFacadeRendererTests
     {
         // Arrange
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, pdfRenderer, statusStatisticsBuilder, null!);
+        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, excelRenderer, pdfRenderer, statusStatisticsBuilder, null!);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -121,10 +144,11 @@ public class GeneralFacadeRendererTests
         optionsMock.Setup(x => x.Value).Returns(settings);
 
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
 
-        var sut = new GeneralFacadeRenderer(consoleRenderer, pdfRenderer, statusStatisticsBuilder, optionsMock.Object);
+        var sut = new GeneralFacadeRenderer(consoleRenderer, excelRenderer, pdfRenderer, statusStatisticsBuilder, optionsMock.Object);
 
         // Act
         Action action = () => sut.RenderResults(null!);
@@ -208,10 +232,11 @@ public class GeneralFacadeRendererTests
             .Setup(x => x.PrintError(It.Is<ErrorMessage>(message => message.Value == "oops")))
             .Callback<ErrorMessage>(message => printErrorCalls++);
 
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
 
-        var sut = new GeneralFacadeRenderer(consoleRendererMock.Object, pdfRenderer, statusStatisticsBuilder, optionsMock.Object);
+        var sut = new GeneralFacadeRenderer(consoleRendererMock.Object, excelRenderer, pdfRenderer, statusStatisticsBuilder, optionsMock.Object);
 
         // Act
         sut.RenderHeader();
@@ -261,6 +286,7 @@ public class GeneralFacadeRendererTests
         var buildCalls = 0;
         var printNoComponentsCalls = 0;
         var printStatusDiagnosticsCalls = 0;
+        var renderExcelCalls = 0;
         var renderPdfCalls = 0;
 
         var consoleRendererMock = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict);
@@ -280,6 +306,14 @@ public class GeneralFacadeRendererTests
                     && statuses[0] == allowedStatuses[0])))
             .Callback<IReadOnlyDictionary<JiraStatusName, int>, IReadOnlyList<JiraStatusName>>((statusStatistics, statuses) => printStatusDiagnosticsCalls++);
 
+        var excelRendererMock = new Mock<IExcelReportRenderer>(MockBehavior.Strict);
+        excelRendererMock
+            .Setup(x => x.RenderReport(
+                It.Is<ComponentCheckRow[]>(filteredRows => filteredRows.Length == 0),
+                It.Is<JiraStatusName[]>(statuses => statuses.Length == 1 && statuses[0] == allowedStatuses[0]),
+                It.Is<IReadOnlyDictionary<JiraStatusName, int>>(statusStatistics => ReferenceEquals(statusStatistics, statistics))))
+            .Callback<ComponentCheckRow[], JiraStatusName[], IReadOnlyDictionary<JiraStatusName, int>>((filteredRows, statuses, statusStatistics) => renderExcelCalls++);
+
         var pdfRendererMock = new Mock<IPdfReportRenderer>(MockBehavior.Strict);
         pdfRendererMock
             .Setup(x => x.RenderReport(
@@ -296,6 +330,7 @@ public class GeneralFacadeRendererTests
 
         var sut = new GeneralFacadeRenderer(
             consoleRendererMock.Object,
+            excelRendererMock.Object,
             pdfRendererMock.Object,
             statisticsBuilderMock.Object,
             optionsMock.Object);
@@ -307,6 +342,7 @@ public class GeneralFacadeRendererTests
         buildCalls.Should().Be(1);
         printNoComponentsCalls.Should().Be(1);
         printStatusDiagnosticsCalls.Should().Be(1);
+        renderExcelCalls.Should().Be(1);
         renderPdfCalls.Should().Be(1);
     }
 
@@ -331,6 +367,7 @@ public class GeneralFacadeRendererTests
         var renderTableCalls = 0;
         var renderSummaryCalls = 0;
         var renderChartCalls = 0;
+        var renderExcelCalls = 0;
         var renderPdfCalls = 0;
 
         var consoleRendererMock = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict);
@@ -353,6 +390,14 @@ public class GeneralFacadeRendererTests
                     && filteredRows[0] == rows[0])))
             .Callback<IReadOnlyList<ComponentCheckRow>>(filteredRows => renderChartCalls++);
 
+        var excelRendererMock = new Mock<IExcelReportRenderer>(MockBehavior.Strict);
+        excelRendererMock
+            .Setup(x => x.RenderReport(
+                It.Is<ComponentCheckRow[]>(filteredRows => filteredRows.Length == 1 && filteredRows[0] == rows[0]),
+                It.Is<JiraStatusName[]>(statuses => statuses.Length == 1 && statuses[0] == allowedStatuses[0]),
+                It.Is<IReadOnlyDictionary<JiraStatusName, int>>(statusStatistics => ReferenceEquals(statusStatistics, statistics))))
+            .Callback<ComponentCheckRow[], JiraStatusName[], IReadOnlyDictionary<JiraStatusName, int>>((filteredRows, statuses, statusStatistics) => renderExcelCalls++);
+
         var pdfRendererMock = new Mock<IPdfReportRenderer>(MockBehavior.Strict);
         pdfRendererMock
             .Setup(x => x.RenderReport(
@@ -369,6 +414,7 @@ public class GeneralFacadeRendererTests
 
         var sut = new GeneralFacadeRenderer(
             consoleRendererMock.Object,
+            excelRendererMock.Object,
             pdfRendererMock.Object,
             statisticsBuilderMock.Object,
             optionsMock.Object);
@@ -381,6 +427,7 @@ public class GeneralFacadeRendererTests
         renderTableCalls.Should().Be(1);
         renderSummaryCalls.Should().Be(1);
         renderChartCalls.Should().Be(1);
+        renderExcelCalls.Should().Be(1);
         renderPdfCalls.Should().Be(1);
     }
 
@@ -410,6 +457,11 @@ public class GeneralFacadeRendererTests
             {
                 Enabled = true,
                 OutputPath = "report.pdf",
+            },
+            Excel = new ExcelOptions
+            {
+                Enabled = true,
+                OutputPath = "report.xlsx",
             },
         };
 

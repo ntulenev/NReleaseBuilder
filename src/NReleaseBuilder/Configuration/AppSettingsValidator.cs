@@ -23,6 +23,7 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         ValidateBitbucket(options.Bitbucket, errors);
         ValidateJira(options.Jira, errors);
         ValidatePdf(options.Pdf, errors);
+        ValidateExcel(options.Excel, errors);
 
         return errors.Count == 0
             ? ValidateOptionsResult.Success
@@ -180,6 +181,43 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         catch (PathTooLongException)
         {
             errors.Add("Pdf.OutputPath is too long.");
+        }
+    }
+
+    private static void ValidateExcel(ExcelOptions? excel, List<string> errors)
+    {
+        if (excel is null)
+        {
+            errors.Add("Excel section is missing in appsettings.json.");
+            return;
+        }
+
+        if (!excel.Enabled)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(excel.OutputPath))
+        {
+            errors.Add("Excel.OutputPath is required when Excel.Enabled is true.");
+            return;
+        }
+
+        try
+        {
+            _ = excel.ResolveOutputPath();
+        }
+        catch (ArgumentException)
+        {
+            errors.Add($"Excel.OutputPath is invalid: '{excel.OutputPath}'.");
+        }
+        catch (NotSupportedException)
+        {
+            errors.Add($"Excel.OutputPath is not supported: '{excel.OutputPath}'.");
+        }
+        catch (PathTooLongException)
+        {
+            errors.Add("Excel.OutputPath is too long.");
         }
     }
 }

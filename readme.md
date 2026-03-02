@@ -15,6 +15,7 @@ NReleaseBuilder/
 |-- Models/
 |-- Presentation/
 |   |-- Console/
+|   |-- Excel/
 |   `-- Pdf/
 |-- Transport/
 |-- Program.cs
@@ -30,7 +31,7 @@ NReleaseBuilder/
 | Application | `Application/` | Orchestrates the end-to-end version check use case via abstractions. |
 | Domain model | `Models/` | Value objects and domain models used across the app. |
 | Infrastructure / integrations | `Bitbucket/`, `Jira/`, `Csv/`, `Transport/` | External API access, parsing, retry/serialization, and CSV input handling. |
-| Presentation | `Presentation/Console/`, `Presentation/Pdf/`, `Presentation/GeneralFacadeRenderer.cs` | Console and PDF output composition and rendering orchestration. |
+| Presentation | `Presentation/Console/`, `Presentation/Excel/`, `Presentation/Pdf/`, `Presentation/GeneralFacadeRenderer.cs` | Console, Excel, and PDF output composition and rendering orchestration. |
 | Configuration | `Configuration/`, `appsettings.json` | Typed settings, validation rules, and runtime options. |
 
 ## What It Does
@@ -46,6 +47,11 @@ NReleaseBuilder/
      - per-component status table
      - summary counters
      - unique Jira tasks by status chart
+   - Excel report (when `Excel.Enabled` is `true`) with:
+     - `Summary` sheet for `Results` and `Unique Jira Tasks By Status`
+     - one sheet per component
+     - `Breaking Changes` and `Required Actions` sections
+     - hyperlinks and status/alert colors aligned with the PDF output
    - PDF report (when `Pdf.Enabled` is `true`) with filtered results and details
 
 ## Recommended Development Flow
@@ -77,6 +83,10 @@ Recommended example:
   "Pdf": {
     "Enabled": true,
     "OutputPath": "nreleasebuilder-report.pdf"
+  },
+  "Excel": {
+    "Enabled": true,
+    "OutputPath": "nreleasebuilder-report.xlsx"
   },
   "Bitbucket": {
     "BaseUrl": "https://api.bitbucket.org/2.0",
@@ -112,6 +122,7 @@ Recommended example:
 | `Bitbucket` | Yes | - | Bitbucket API settings. |
 | `Jira` | Yes | - | Jira API settings. |
 | `Pdf` | No | `{ "Enabled": true, "OutputPath": "nreleasebuilder-report.pdf" }` | PDF report settings. |
+| `Excel` | No | `{ "Enabled": false, "OutputPath": "nreleasebuilder-report.xlsx" }` | Excel report settings. |
 
 ### `Bitbucket` Options
 
@@ -174,6 +185,26 @@ Bitbucket repository name matching notes:
 - `OutputPath` must be non-empty when PDF is enabled.
 - `OutputPath` must be a valid file system path.
 
+### `Excel` Options
+
+| Key | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `Enabled` | No | `false` | Enables Excel generation. |
+| `OutputPath` | Required when `Enabled=true` | `nreleasebuilder-report.xlsx` | Relative paths are resolved from current working directory. |
+
+`Excel` validation rules:
+
+- `OutputPath` must be non-empty when Excel is enabled.
+- `OutputPath` must be a valid file system path.
+
+Excel report layout notes:
+
+- `Summary` sheet contains the filtered `Results` table and `Unique Jira Tasks By Status`.
+- Each component gets its own sheet.
+- Component sheets include `Newer Versions`, `Breaking Changes`, and `Required Actions`.
+- Hyperlinks are applied directly to version, Jira task, and details cells where available.
+- Status and alert colors follow the same semantics as the PDF report.
+
 General notes:
 
 - `CsvComponentNamesFilter`: empty means all components are included.
@@ -192,8 +223,7 @@ sample-worker,registry.invalid/moonlight.task.runner:2.4.0
 
 Only `container` and `image` are required.
 
-## 📄 Output
-The utility console output.
+## Output
+The utility supports console, PDF, and Excel output.
 
 ![Example output](RBuilder.png)
-

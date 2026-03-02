@@ -37,4 +37,10 @@ public sealed class AppSettings
     /// </summary>
     [Required]
     public PdfOptions Pdf { get; init; } = new();
+
+    /// <summary>
+    /// Excel report output options.
+    /// </summary>
+    [Required]
+    public ExcelOptions Excel { get; init; } = new();
 }

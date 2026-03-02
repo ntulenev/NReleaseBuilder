@@ -22,6 +22,7 @@ public class AppSettingsTests
         var csvPath = settings.CsvFilePath;
         var filter = settings.CsvComponentNamesFilter;
         var pdf = settings.Pdf;
+        var excel = settings.Excel;
 
         // Assert
         csvPath.Should().Be("components.csv");
@@ -30,6 +31,7 @@ public class AppSettingsTests
         settings.Bitbucket.Should().NotBeNull();
         settings.Jira.Should().NotBeNull();
         pdf.Should().NotBeNull();
+        excel.Should().NotBeNull();
     }
 
     private static BitbucketOptions CreateBitbucketOptions() =>
