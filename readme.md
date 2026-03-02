@@ -225,7 +225,7 @@ Only `container` and `image` are required.
 
 ## Output
 
->For demonstration purposes, the program output shown in the screenshots uses synthetic data to avoid exposing information from real Jira issues and users.
+>For demonstration purposes, the program output shown in the screenshots uses synthetic data to avoid exposing information from real Jira issues and Applications.
 
 ### Console
 <img src="Release_1.png" alt="Output part 1">
