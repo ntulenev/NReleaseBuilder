@@ -6,7 +6,7 @@ using Moq;
 
 using NuGet.Versioning;
 
-using NReleaseBuilder.Abstractions.Application;
+using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Abstractions.Csv;
 using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Application;

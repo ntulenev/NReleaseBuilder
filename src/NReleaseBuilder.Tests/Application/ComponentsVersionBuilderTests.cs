@@ -5,10 +5,10 @@ using Moq;
 using NuGet.Versioning;
 
 using NReleaseBuilder.Abstractions.Bitbucket;
-using NReleaseBuilder.Application;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 using NReleaseBuilder.Models.Rendering;
+using NReleaseBuilder.Bitbucket;
 
 namespace NReleaseBuilder.Tests.Application;
 

@@ -1,7 +1,7 @@
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 
-namespace NReleaseBuilder.Abstractions.Application;
+namespace NReleaseBuilder.Abstractions.Bitbucket;
 
 /// <summary>
 /// Builds component check rows from normalized component rows and repository context.

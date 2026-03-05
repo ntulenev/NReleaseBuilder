@@ -1,9 +1,8 @@
-using NReleaseBuilder.Abstractions.Application;
 using NReleaseBuilder.Abstractions.Bitbucket;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 
-namespace NReleaseBuilder.Application;
+namespace NReleaseBuilder.Bitbucket;
 
 /// <summary>
 /// Coordinates repository tag loading and component check row construction.
