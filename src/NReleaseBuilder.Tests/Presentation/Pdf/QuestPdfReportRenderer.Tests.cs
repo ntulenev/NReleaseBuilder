@@ -35,9 +35,14 @@ public class QuestPdfReportRendererTests
 
         var fileStore = new Mock<IPdfReportFileStore>(MockBehavior.Strict).Object;
         var contentComposer = new Mock<IPdfContentComposer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = CreateReportRunContextAccessor();
 
         // Act
-        var exception = Record.Exception(() => _ = new QuestPdfReportRenderer(optionsMock.Object, fileStore, contentComposer));
+        var exception = Record.Exception(() => _ = new QuestPdfReportRenderer(
+            optionsMock.Object,
+            fileStore,
+            contentComposer,
+            reportRunContextAccessor));
 
         // Assert
         exception.Should().BeNull();
@@ -53,7 +58,11 @@ public class QuestPdfReportRendererTests
         var contentComposer = new Mock<IPdfContentComposer>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new QuestPdfReportRenderer(null!, fileStore, contentComposer);
+        Action action = () => _ = new QuestPdfReportRenderer(
+            null!,
+            fileStore,
+            contentComposer,
+            CreateReportRunContextAccessor());
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -69,7 +78,11 @@ public class QuestPdfReportRendererTests
         var contentComposer = new Mock<IPdfContentComposer>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new QuestPdfReportRenderer(options, null!, contentComposer);
+        Action action = () => _ = new QuestPdfReportRenderer(
+            options,
+            null!,
+            contentComposer,
+            CreateReportRunContextAccessor());
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -85,7 +98,11 @@ public class QuestPdfReportRendererTests
         var fileStore = new Mock<IPdfReportFileStore>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new QuestPdfReportRenderer(options, fileStore, null!);
+        Action action = () => _ = new QuestPdfReportRenderer(
+            options,
+            fileStore,
+            null!,
+            CreateReportRunContextAccessor());
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -104,7 +121,11 @@ public class QuestPdfReportRendererTests
         var fileStore = new Mock<IPdfReportFileStore>(MockBehavior.Strict).Object;
         var contentComposer = new Mock<IPdfContentComposer>(MockBehavior.Strict).Object;
 
-        var sut = new QuestPdfReportRenderer(optionsMock.Object, fileStore, contentComposer);
+        var sut = new QuestPdfReportRenderer(
+            optionsMock.Object,
+            fileStore,
+            contentComposer,
+            CreateReportRunContextAccessor());
 
         // Act
         Action nullRows = () => sut.RenderReport(null!, [], new Dictionary<JiraStatusName, int>());
@@ -139,7 +160,11 @@ public class QuestPdfReportRendererTests
             [new JiraStatusName("Done")] = 1,
         };
 
-        var sut = new QuestPdfReportRenderer(optionsMock.Object, fileStore, contentComposer);
+        var sut = new QuestPdfReportRenderer(
+            optionsMock.Object,
+            fileStore,
+            contentComposer,
+            CreateReportRunContextAccessor());
 
         // Act
         var exception = Record.Exception(() => sut.RenderReport(rows, statuses, statistics));
@@ -201,7 +226,11 @@ public class QuestPdfReportRendererTests
                 pdfBytes.Should().NotBeEmpty();
             });
 
-        var sut = new QuestPdfReportRenderer(optionsMock.Object, fileStoreMock.Object, contentComposerMock.Object);
+        var sut = new QuestPdfReportRenderer(
+            optionsMock.Object,
+            fileStoreMock.Object,
+            contentComposerMock.Object,
+            CreateReportRunContextAccessor());
 
         // Act
         sut.RenderReport(rows, statuses, statistics);
@@ -268,4 +297,14 @@ public class QuestPdfReportRendererTests
             hasRequiredActions: false,
             hasBreakingChanges: false,
             hasDependencyIssues: false);
+
+    private static IReportRunContextAccessor CreateReportRunContextAccessor(string? pdfOutputPathOverride = null)
+    {
+        var accessorMock = new Mock<IReportRunContextAccessor>(MockBehavior.Loose);
+        accessorMock
+            .SetupGet(x => x.Current)
+            .Returns(new NReleaseBuilder.Models.Rendering.ReportRunContext(
+                PdfOutputPathOverride: pdfOutputPathOverride));
+        return accessorMock.Object;
+    }
 }

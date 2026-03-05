@@ -80,6 +80,20 @@ Recommended example:
 {
   "CsvFilePath": "C:\\path\\to\\components.csv",
   "CsvComponentNamesFilter": [],
+  "CsvComponentGroups": [
+    {
+      "Name": "Backoffice",
+      "ComponentNames": [ "api-a", "api-b" ],
+      "PdfOutputPath": "backoffice-report.pdf",
+      "ExcelOutputPath": "backoffice-report.xlsx"
+    },
+    {
+      "Name": "Export",
+      "ComponentNames": [ "svc-x", "svc-y" ],
+      "PdfOutputPath": "export-report.pdf",
+      "ExcelOutputPath": "export-report.xlsx"
+    }
+  ],
   "Pdf": {
     "Enabled": true,
     "OutputPath": "nreleasebuilder-report.pdf"
@@ -119,10 +133,20 @@ Recommended example:
 | --- | --- | --- | --- |
 | `CsvFilePath` | Yes | - | Path to source CSV file. File must exist. |
 | `CsvComponentNamesFilter` | No | `[]` | Optional allow-list of component names (case-insensitive). |
+| `CsvComponentGroups` | No | `[]` | Optional grouped filters. When non-empty, one report run is generated per group. |
 | `Bitbucket` | Yes | - | Bitbucket API settings. |
 | `Jira` | Yes | - | Jira API settings. |
 | `Pdf` | No | `{ "Enabled": true, "OutputPath": "nreleasebuilder-report.pdf" }` | PDF report settings. |
 | `Excel` | No | `{ "Enabled": false, "OutputPath": "nreleasebuilder-report.xlsx" }` | Excel report settings. |
+
+### `CsvComponentGroups` Options
+
+| Key | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `Name` | Yes | `""` | Group display name shown in runtime logs and PDF header. Must be unique. |
+| `ComponentNames` | Yes | `[]` | Group-specific component allow-list. Must contain at least one non-empty value. |
+| `PdfOutputPath` | Required when `Pdf.Enabled=true` | `null` | Output path for this group's PDF report. Date suffix is appended automatically. |
+| `ExcelOutputPath` | Required when `Excel.Enabled=true` | `null` | Output path for this group's Excel report. Date suffix is appended automatically. |
 
 ### `Bitbucket` Options
 
@@ -208,6 +232,7 @@ Excel report layout notes:
 General notes:
 
 - `CsvComponentNamesFilter`: empty means all components are included.
+- `CsvComponentGroups`: when configured, `CsvComponentNamesFilter` is ignored and per-group filters are used instead.
 - `Jira.AllowedTaskStatuses`: non-empty means all detected statuses for a row must be in the allow-list.
 - Do not commit real credentials to source control.
 

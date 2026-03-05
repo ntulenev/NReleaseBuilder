@@ -35,11 +35,11 @@ public sealed class ExcelReportFileStore : IExcelReportFileStore
     }
 
     /// <inheritdoc />
-    public string Save(Stream contentStream)
+    public string Save(Stream contentStream, string? outputPathOverride = null)
     {
         ArgumentNullException.ThrowIfNull(contentStream);
 
-        var outputPath = _settings.Excel.ResolveOutputPath();
+        var outputPath = _settings.Excel.ResolveOutputPath(outputPathOverride);
         var outputDirectory = Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrWhiteSpace(outputDirectory))
         {

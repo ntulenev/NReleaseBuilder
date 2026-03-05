@@ -66,6 +66,19 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
     }
 
     /// <inheritdoc />
+    public void PrintRunHeading(string? runName, int runIndex, int totalRuns)
+    {
+        if (totalRuns <= 1 || string.IsNullOrWhiteSpace(runName))
+        {
+            return;
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine(
+            $"[bold grey]Running report group {runIndex + 1}/{totalRuns}: {Markup.Escape(runName)}[/]");
+    }
+
+    /// <inheritdoc />
     public async Task<T> RunBitbucketLoadingWithProgressAsync<T>(
         IReadOnlyList<RepositoryName> repositories,
         Func<BitbucketProgressCallbacks, Task<T>> operation)
@@ -194,6 +207,14 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
 
     /// <inheritdoc />
     public void PrintNoRows() => AnsiConsole.MarkupLine("[yellow]No rows found in CSV.[/]");
+
+    /// <inheritdoc />
+    public void PrintNoRowsMatchedGroup(string runName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runName);
+        AnsiConsole.MarkupLine(
+            $"[yellow]No CSV rows matched group:[/] [silver]{Markup.Escape(runName)}[/]");
+    }
 
     /// <inheritdoc />
     public void PrintNoComponentsMatchedStatusFilter(IReadOnlyList<JiraStatusName> statuses)

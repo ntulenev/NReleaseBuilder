@@ -25,11 +25,15 @@ public sealed class PdfOptions
     /// Resolves output path to an absolute file system path.
     /// </summary>
     /// <returns>Absolute output path.</returns>
-    public string ResolveOutputPath()
+    public string ResolveOutputPath(string? outputPathOverride = null)
     {
-        var candidatePath = string.IsNullOrWhiteSpace(OutputPath)
+        var configuredPath = string.IsNullOrWhiteSpace(outputPathOverride)
+            ? OutputPath
+            : outputPathOverride;
+
+        var candidatePath = string.IsNullOrWhiteSpace(configuredPath)
             ? "nreleasebuilder-report.pdf"
-            : OutputPath.Trim();
+            : configuredPath.Trim();
 
         var absolutePath = Path.IsPathRooted(candidatePath)
             ? Path.GetFullPath(candidatePath)

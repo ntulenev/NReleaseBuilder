@@ -17,6 +17,7 @@ public interface IExcelReportFileStore
     /// Saves Excel report content using the configured output path.
     /// </summary>
     /// <param name="contentStream">Excel content stream.</param>
+    /// <param name="outputPathOverride">Optional output path override.</param>
     /// <returns>The resolved output path.</returns>
-    string Save(Stream contentStream);
+    string Save(Stream contentStream, string? outputPathOverride = null);
 }

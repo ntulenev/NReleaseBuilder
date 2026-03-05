@@ -7,6 +7,7 @@ using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
+using NReleaseBuilder.Models.Rendering;
 
 namespace NReleaseBuilder.Application;
 
@@ -19,97 +20,121 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     /// Initializes a new instance of the <see cref="VersionCheckApplication"/> class.
     /// </summary>
     /// <param name="csvReader">CSV reader service.</param>
-    /// <param name="repositoryTagLookupBatchLoader">Repository tag lookup batch loader.</param>
-    /// <param name="versionChecker">Version comparison service.</param>
+    /// <param name="repositoryNameNormalizer">Component-row repository name normalizer.</param>
+    /// <param name="componentsVersionBuilder">Component version rows builder.</param>
     /// <param name="renderer">Application renderer.</param>
+    /// <param name="reportRunContextAccessor">Current report run context accessor.</param>
     /// <param name="options">Application settings options.</param>
     public VersionCheckApplication(
         ICsvComponentReader csvReader,
-        IRepositoryTagLookupBatchLoader repositoryTagLookupBatchLoader,
-        IComponentVersionChecker versionChecker,
+        IRepositoryNameNormalizer repositoryNameNormalizer,
+        IComponentsVersionBuilder componentsVersionBuilder,
         IRenderer renderer,
+        IReportRunContextAccessor reportRunContextAccessor,
         IOptions<AppSettings> options)
     {
         ArgumentNullException.ThrowIfNull(csvReader);
-        ArgumentNullException.ThrowIfNull(repositoryTagLookupBatchLoader);
-        ArgumentNullException.ThrowIfNull(versionChecker);
+        ArgumentNullException.ThrowIfNull(repositoryNameNormalizer);
+        ArgumentNullException.ThrowIfNull(componentsVersionBuilder);
         ArgumentNullException.ThrowIfNull(renderer);
+        ArgumentNullException.ThrowIfNull(reportRunContextAccessor);
         ArgumentNullException.ThrowIfNull(options);
 
         _csvReader = csvReader;
-        _repositoryTagLookupBatchLoader = repositoryTagLookupBatchLoader;
-        _versionChecker = versionChecker;
+        _repositoryNameNormalizer = repositoryNameNormalizer;
+        _componentsVersionBuilder = componentsVersionBuilder;
         _renderer = renderer;
-        _bitbucketOptions = options.Value.Bitbucket;
+        _reportRunContextAccessor = reportRunContextAccessor;
+        _settings = options.Value;
     }
 
     /// <inheritdoc />
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
-        var componentRows = TryReadComponentRows()?.ToList();
-
-        if (componentRows is null)
-        {
-            return 1;
-        }
-
         _renderer.RenderHeader();
-
-        if (TryHandleNoComponentRows(componentRows))
-        {
-            return 0;
-        }
-
-        var normalizedComponentRows = NormalizeRepositoryNames(componentRows);
-        var repositoryContext = RepositoryVersionContext.BuildRepositoryVersionContext(normalizedComponentRows);
-        _renderer.PrintRepositoryCheckCount(repositoryContext.Repositories.Count);
-
-        var tagLookups = await _repositoryTagLookupBatchLoader.LoadAsync(
-            repositoryContext.Repositories,
-            repositoryContext.MinCurrentVersionsByRepository,
-            cancellationToken)
-            .ConfigureAwait(false);
-
-        if (tagLookups is null)
-        {
-            return 1;
-        }
-
-        var checkRows = _versionChecker.BuildRows(normalizedComponentRows, tagLookups);
-        _renderer.RenderResults(checkRows);
+        await RunReportRunsAsync(_settings.BuildReportRuns(), cancellationToken).ConfigureAwait(false);
         return 0;
     }
 
-    private IReadOnlyList<ComponentRow>? TryReadComponentRows()
-        => _csvReader.Read();
-
-    private List<ComponentRow> NormalizeRepositoryNames(List<ComponentRow> componentRows)
+    private async Task RunReportRunsAsync(
+        IReadOnlyList<ReportRunDefinition> reportRuns,
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(componentRows);
-
-        if (_bitbucketOptions.RepositoryNameOverrides.Count == 0)
+        for (var runIndex = 0; runIndex < reportRuns.Count; runIndex++)
         {
-            return componentRows;
+            var reportRun = reportRuns[runIndex];
+            await RunReportRunAsync(
+                reportRun,
+                runIndex,
+                reportRuns.Count,
+                cancellationToken).ConfigureAwait(false);
         }
-
-        var normalizedRows = new List<ComponentRow>(componentRows.Count);
-
-        foreach (var row in componentRows)
-        {
-            normalizedRows.Add(new ComponentRow(
-                row.Component,
-                _bitbucketOptions.ResolveRepositoryName(row.Repository),
-                row.Version));
-        }
-
-        return normalizedRows;
     }
 
-    private bool TryHandleNoComponentRows(List<ComponentRow> componentRows)
+    private async Task RunReportRunAsync(
+        ReportRunDefinition reportRun,
+        int runIndex,
+        int totalRunCount,
+        CancellationToken cancellationToken)
+    {
+        if (totalRunCount > 1 && !string.IsNullOrWhiteSpace(reportRun.Name))
+        {
+            _renderer.PrintRunHeading(reportRun.Name, runIndex, totalRunCount);
+        }
+
+        _reportRunContextAccessor.Setup(reportRun);
+
+        try
+        {
+            var componentRows = TryReadComponentRows(reportRun.ComponentNamesFilter)?.ToList();
+
+            if (componentRows is null)
+            {
+                return;
+            }
+
+            if (TryHandleNoComponentRows(componentRows, reportRun.Name))
+            {
+                return;
+            }
+
+            var normalizedComponentRows = _repositoryNameNormalizer.Normalize(componentRows);
+            var repositoryContext = RepositoryVersionContext.BuildRepositoryVersionContext(normalizedComponentRows);
+
+            _renderer.PrintRepositoryCheckCount(repositoryContext.Repositories.Count);
+
+            var checkRows = await _componentsVersionBuilder.BuildAsync(
+                normalizedComponentRows,
+                repositoryContext,
+                cancellationToken)
+                .ConfigureAwait(false);
+
+            if (checkRows is null)
+            {
+                return;
+            }
+
+            _renderer.RenderResults(checkRows);
+        }
+        finally
+        {
+            _reportRunContextAccessor.Reset();
+        }
+    }
+
+    private IReadOnlyList<ComponentRow>? TryReadComponentRows(IReadOnlyList<string>? componentNamesFilter)
+        => _csvReader.Read(componentNamesFilter);
+
+    private bool TryHandleNoComponentRows(List<ComponentRow> componentRows, string? runName)
     {
         if (componentRows.Count != 0)
         {
             return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(runName))
+        {
+            _renderer.PrintNoRowsMatchedGroup(runName);
         }
 
         _renderer.PrintNoRows();
@@ -117,8 +142,10 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     }
 
     private readonly ICsvComponentReader _csvReader;
-    private readonly IRepositoryTagLookupBatchLoader _repositoryTagLookupBatchLoader;
-    private readonly IComponentVersionChecker _versionChecker;
+    private readonly IRepositoryNameNormalizer _repositoryNameNormalizer;
+    private readonly IComponentsVersionBuilder _componentsVersionBuilder;
     private readonly IRenderer _renderer;
-    private readonly BitbucketOptions _bitbucketOptions;
+    private readonly IReportRunContextAccessor _reportRunContextAccessor;
+    private readonly AppSettings _settings;
+
 }

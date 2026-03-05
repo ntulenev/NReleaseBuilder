@@ -20,6 +20,7 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
 
         ValidateCsvPath(options.CsvFilePath, errors);
         ValidateCsvComponentNamesFilter(options.CsvComponentNamesFilter, errors);
+        ValidateCsvComponentGroups(options.CsvComponentGroups, options.Pdf, options.Excel, errors);
         ValidateBitbucket(options.Bitbucket, errors);
         ValidateJira(options.Jira, errors);
         ValidatePdf(options.Pdf, errors);
@@ -55,6 +56,108 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
         if (componentNamesFilter.Any(string.IsNullOrWhiteSpace))
         {
             errors.Add("CsvComponentNamesFilter must not contain empty values.");
+        }
+    }
+
+    private static void ValidateCsvComponentGroups(
+        IReadOnlyList<CsvComponentGroupOptions>? componentGroups,
+        PdfOptions? pdf,
+        ExcelOptions? excel,
+        List<string> errors)
+    {
+        if (componentGroups is null)
+        {
+            errors.Add("CsvComponentGroups must not be null.");
+            return;
+        }
+
+        if (componentGroups.Count == 0)
+        {
+            return;
+        }
+
+        var groupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var groupIndex = 0; groupIndex < componentGroups.Count; groupIndex++)
+        {
+            var group = componentGroups[groupIndex];
+
+            if (string.IsNullOrWhiteSpace(group.Name))
+            {
+                errors.Add($"CsvComponentGroups[{groupIndex}].Name must not be empty.");
+            }
+            else if (!groupNames.Add(group.Name.Trim()))
+            {
+                errors.Add($"CsvComponentGroups contains duplicate group name: '{group.Name.Trim()}'.");
+            }
+
+            if (group.ComponentNames is null)
+            {
+                errors.Add($"CsvComponentGroups[{groupIndex}].ComponentNames must not be null.");
+            }
+            else
+            {
+                if (group.ComponentNames.Count == 0)
+                {
+                    errors.Add($"CsvComponentGroups[{groupIndex}].ComponentNames must contain at least one component name.");
+                }
+
+                if (group.ComponentNames.Any(string.IsNullOrWhiteSpace))
+                {
+                    errors.Add($"CsvComponentGroups[{groupIndex}].ComponentNames must not contain empty values.");
+                }
+            }
+
+            if (pdf?.Enabled == true)
+            {
+                ValidateGroupOutputPath(
+                    group.PdfOutputPath,
+                    $"CsvComponentGroups[{groupIndex}].PdfOutputPath",
+                    "Pdf",
+                    (outputPath) => pdf.ResolveOutputPath(outputPath),
+                    errors);
+            }
+
+            if (excel?.Enabled == true)
+            {
+                ValidateGroupOutputPath(
+                    group.ExcelOutputPath,
+                    $"CsvComponentGroups[{groupIndex}].ExcelOutputPath",
+                    "Excel",
+                    (outputPath) => excel.ResolveOutputPath(outputPath),
+                    errors);
+            }
+        }
+    }
+
+    private static void ValidateGroupOutputPath(
+        string? outputPath,
+        string groupPathKey,
+        string reportType,
+        Func<string, string> resolver,
+        List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            errors.Add($"{groupPathKey} is required when {reportType}.Enabled is true.");
+            return;
+        }
+
+        try
+        {
+            _ = resolver(outputPath);
+        }
+        catch (ArgumentException)
+        {
+            errors.Add($"{groupPathKey} is invalid: '{outputPath}'.");
+        }
+        catch (NotSupportedException)
+        {
+            errors.Add($"{groupPathKey} is not supported: '{outputPath}'.");
+        }
+        catch (PathTooLongException)
+        {
+            errors.Add($"{groupPathKey} is too long.");
         }
     }
 

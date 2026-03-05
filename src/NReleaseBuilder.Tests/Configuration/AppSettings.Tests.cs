@@ -1,6 +1,7 @@
 using FluentAssertions;
 
 using NReleaseBuilder.Configuration;
+using NReleaseBuilder.Models.Rendering;
 
 namespace NReleaseBuilder.Tests.Configuration;
 
@@ -32,6 +33,59 @@ public class AppSettingsTests
         settings.Jira.Should().NotBeNull();
         pdf.Should().NotBeNull();
         excel.Should().NotBeNull();
+    }
+
+    [Fact(DisplayName = "BuildReportRuns returns single default run when no groups configured.")]
+    [Trait("Category", "Unit")]
+    public void BuildReportRunsReturnsSingleDefaultRunWhenNoGroupsConfigured()
+    {
+        // Arrange
+        var settings = new AppSettings
+        {
+            CsvFilePath = "components.csv",
+            Bitbucket = CreateBitbucketOptions(),
+            Jira = CreateJiraOptions(),
+        };
+
+        // Act
+        var reportRuns = settings.BuildReportRuns();
+
+        // Assert
+        reportRuns.Should().HaveCount(1);
+        reportRuns[0].Should().Be(new ReportRunDefinition(null, null, null, null));
+    }
+
+    [Fact(DisplayName = "BuildReportRuns maps grouped settings to report run definitions.")]
+    [Trait("Category", "Unit")]
+    public void BuildReportRunsMapsGroupedSettingsToReportRunDefinitions()
+    {
+        // Arrange
+        var settings = new AppSettings
+        {
+            CsvFilePath = "components.csv",
+            Bitbucket = CreateBitbucketOptions(),
+            Jira = CreateJiraOptions(),
+            CsvComponentGroups =
+            [
+                new CsvComponentGroupOptions
+                {
+                    Name = "  Backoffice  ",
+                    ComponentNames = ["api-a", "api-b"],
+                    PdfOutputPath = "backoffice.pdf",
+                    ExcelOutputPath = "backoffice.xlsx",
+                },
+            ],
+        };
+
+        // Act
+        var reportRuns = settings.BuildReportRuns();
+
+        // Assert
+        reportRuns.Should().HaveCount(1);
+        reportRuns[0].Name.Should().Be("Backoffice");
+        reportRuns[0].ComponentNamesFilter.Should().Equal("api-a", "api-b");
+        reportRuns[0].PdfOutputPathOverride.Should().Be("backoffice.pdf");
+        reportRuns[0].ExcelOutputPathOverride.Should().Be("backoffice.xlsx");
     }
 
     private static BitbucketOptions CreateBitbucketOptions() =>

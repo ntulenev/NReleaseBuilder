@@ -25,17 +25,21 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
     /// <param name="options">Application settings options.</param>
     /// <param name="pdfReportFileStore">PDF output persistence service.</param>
     /// <param name="pdfContentComposer">PDF page content composer.</param>
+    /// <param name="reportRunContextAccessor">Current report run context accessor.</param>
     public QuestPdfReportRenderer(
         IOptions<AppSettings> options,
         IPdfReportFileStore pdfReportFileStore,
-        IPdfContentComposer pdfContentComposer)
+        IPdfContentComposer pdfContentComposer,
+        IReportRunContextAccessor reportRunContextAccessor)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(pdfReportFileStore);
         ArgumentNullException.ThrowIfNull(pdfContentComposer);
+        ArgumentNullException.ThrowIfNull(reportRunContextAccessor);
         _settings = options.Value;
         _pdfReportFileStore = pdfReportFileStore;
         _pdfContentComposer = pdfContentComposer;
+        _reportRunContextAccessor = reportRunContextAccessor;
     }
 
     /// <inheritdoc />
@@ -53,7 +57,8 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
             return;
         }
 
-        var outputPath = _settings.Pdf.ResolveOutputPath();
+        var outputPath = _settings.Pdf.ResolveOutputPath(_reportRunContextAccessor.Current.PdfOutputPathOverride);
+        var groupName = _reportRunContextAccessor.Current.GroupName;
 
         QuestPDF.Settings.License = QLicenseType.Community;
 
@@ -77,6 +82,10 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
                                 DateTimeOffset.Now));
                         _ = column.Item().Text("Source: " + _settings.CsvFilePath);
                         _ = column.Item().Text("Workspace: " + _settings.Bitbucket.Workspace);
+                        if (!string.IsNullOrWhiteSpace(groupName))
+                        {
+                            _ = column.Item().Text("Group: " + groupName);
+                        }
 
                         if (allowedStatuses.Length > 0)
                         {
@@ -107,4 +116,5 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
     private readonly AppSettings _settings;
     private readonly IPdfReportFileStore _pdfReportFileStore;
     private readonly IPdfContentComposer _pdfContentComposer;
+    private readonly IReportRunContextAccessor _reportRunContextAccessor;
 }

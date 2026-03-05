@@ -32,15 +32,19 @@ public sealed class CsvComponentReader : ICsvComponentReader
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.CsvFilePath);
 
         _csvFilePath = settings.CsvFilePath;
-        _componentNamesFilter = BuildComponentNamesFilter(settings.CsvComponentNamesFilter);
+        _defaultComponentNamesFilter = BuildComponentNamesFilter(settings.CsvComponentNamesFilter);
         _renderer = renderer;
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<ComponentRow>? Read()
+    public IReadOnlyList<ComponentRow>? Read(IReadOnlyList<string>? componentNamesFilter = null)
     {
         try
         {
+            var effectiveFilter = componentNamesFilter is null
+                ? _defaultComponentNamesFilter
+                : BuildComponentNamesFilter(componentNamesFilter);
+
             var rows = new HashSet<ComponentRow>();
 
             using var parser = new TextFieldParser(_csvFilePath);
@@ -78,7 +82,7 @@ public sealed class CsvComponentReader : ICsvComponentReader
                     continue;
                 }
 
-                if (!IsComponentIncluded(component))
+                if (!IsComponentIncluded(component, effectiveFilter))
                 {
                     continue;
                 }
@@ -156,8 +160,8 @@ public sealed class CsvComponentReader : ICsvComponentReader
         return (imageWithoutDigest[(lastSlashIndex + 1)..], string.Empty);
     }
 
-    private bool IsComponentIncluded(string component)
-        => _componentNamesFilter.Count == 0 || _componentNamesFilter.Contains(component);
+    private static bool IsComponentIncluded(string component, HashSet<string> componentNamesFilter)
+        => componentNamesFilter.Count == 0 || componentNamesFilter.Contains(component);
 
     private static HashSet<string> BuildComponentNamesFilter(IReadOnlyList<string>? componentNamesFilter)
     {
@@ -187,6 +191,6 @@ public sealed class CsvComponentReader : ICsvComponentReader
     }
 
     private readonly string _csvFilePath;
-    private readonly HashSet<string> _componentNamesFilter;
+    private readonly HashSet<string> _defaultComponentNamesFilter;
     private readonly IRenderer _renderer;
 }
