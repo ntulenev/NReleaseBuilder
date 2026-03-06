@@ -25,11 +25,15 @@ public sealed class ExcelOptions
     /// Resolves output path to an absolute file system path.
     /// </summary>
     /// <returns>Absolute output path.</returns>
-    public string ResolveOutputPath()
+    public string ResolveOutputPath(string? outputPathOverride = null)
     {
-        var candidatePath = string.IsNullOrWhiteSpace(OutputPath)
+        var configuredPath = string.IsNullOrWhiteSpace(outputPathOverride)
+            ? OutputPath
+            : outputPathOverride;
+
+        var candidatePath = string.IsNullOrWhiteSpace(configuredPath)
             ? "nreleasebuilder-report.xlsx"
-            : OutputPath.Trim();
+            : configuredPath.Trim();
 
         var absolutePath = Path.IsPathRooted(candidatePath)
             ? Path.GetFullPath(candidatePath)

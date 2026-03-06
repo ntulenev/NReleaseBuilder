@@ -19,21 +19,25 @@ public sealed class MiniExcelReportRenderer : IExcelReportRenderer
     /// <param name="excelContentComposer">Excel workbook content composer.</param>
     /// <param name="excelReportFileStore">Excel output persistence service.</param>
     /// <param name="workbookFormatter">Workbook formatting service.</param>
+    /// <param name="reportRunContextAccessor">Current report run context accessor.</param>
     public MiniExcelReportRenderer(
         IOptions<AppSettings> options,
         IExcelContentComposer excelContentComposer,
         IExcelReportFileStore excelReportFileStore,
-        IWorkbookFormatter workbookFormatter)
+        IWorkbookFormatter workbookFormatter,
+        IReportRunContextAccessor reportRunContextAccessor)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(excelContentComposer);
         ArgumentNullException.ThrowIfNull(excelReportFileStore);
         ArgumentNullException.ThrowIfNull(workbookFormatter);
+        ArgumentNullException.ThrowIfNull(reportRunContextAccessor);
 
         _settings = options.Value;
         _excelContentComposer = excelContentComposer;
         _excelReportFileStore = excelReportFileStore;
         _workbookFormatter = workbookFormatter;
+        _reportRunContextAccessor = reportRunContextAccessor;
     }
 
     /// <inheritdoc />
@@ -54,7 +58,9 @@ public sealed class MiniExcelReportRenderer : IExcelReportRenderer
         var workbook = _excelContentComposer.ComposeWorkbook(rows, allowedStatuses, statusStatistics);
         using var outputStream = _excelReportFileStore.CreateWorkbookStream(workbook.Sheets);
         _workbookFormatter.Format(outputStream, workbook.Layouts);
-        var outputPath = _excelReportFileStore.Save(outputStream);
+        var outputPath = _excelReportFileStore.Save(
+            outputStream,
+            _reportRunContextAccessor.Current.ExcelOutputPathOverride);
 
         System.Console.WriteLine($"Excel report saved to: {outputPath}");
     }
@@ -63,4 +69,5 @@ public sealed class MiniExcelReportRenderer : IExcelReportRenderer
     private readonly IExcelContentComposer _excelContentComposer;
     private readonly IExcelReportFileStore _excelReportFileStore;
     private readonly IWorkbookFormatter _workbookFormatter;
+    private readonly IReportRunContextAccessor _reportRunContextAccessor;
 }

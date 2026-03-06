@@ -26,9 +26,15 @@ public class MiniExcelReportRendererTests
         var composer = new Mock<IExcelContentComposer>(MockBehavior.Strict).Object;
         var fileStore = new Mock<IExcelReportFileStore>(MockBehavior.Strict).Object;
         var formatter = new Mock<IWorkbookFormatter>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = CreateReportRunContextAccessor();
 
         // Act
-        var exception = Record.Exception(() => _ = new MiniExcelReportRenderer(options, composer, fileStore, formatter));
+        var exception = Record.Exception(() => _ = new MiniExcelReportRenderer(
+            options,
+            composer,
+            fileStore,
+            formatter,
+            reportRunContextAccessor));
 
         // Assert
         exception.Should().BeNull();
@@ -44,7 +50,12 @@ public class MiniExcelReportRendererTests
         var composer = new Mock<IExcelContentComposer>(MockBehavior.Strict).Object;
         var fileStore = new Mock<IExcelReportFileStore>(MockBehavior.Strict).Object;
         var formatter = new Mock<IWorkbookFormatter>(MockBehavior.Strict).Object;
-        var sut = new MiniExcelReportRenderer(Options.Create(settings), composer, fileStore, formatter);
+        var sut = new MiniExcelReportRenderer(
+            Options.Create(settings),
+            composer,
+            fileStore,
+            formatter,
+            CreateReportRunContextAccessor());
 
         // Act
         sut.RenderReport([CreateRow()], [new JiraStatusName("Done")], CreateStatistics());
@@ -62,7 +73,12 @@ public class MiniExcelReportRendererTests
         var composer = new Mock<IExcelContentComposer>(MockBehavior.Strict).Object;
         var fileStore = new Mock<IExcelReportFileStore>(MockBehavior.Strict).Object;
         var formatter = new Mock<IWorkbookFormatter>(MockBehavior.Strict).Object;
-        var sut = new MiniExcelReportRenderer(Options.Create(settings), composer, fileStore, formatter);
+        var sut = new MiniExcelReportRenderer(
+            Options.Create(settings),
+            composer,
+            fileStore,
+            formatter,
+            CreateReportRunContextAccessor());
 
         // Act
         Action nullRows = () => sut.RenderReport(null!, [], CreateStatistics());
@@ -113,7 +129,8 @@ public class MiniExcelReportRendererTests
             .Returns(workbookStream);
         fileStoreMock
             .Setup(x => x.Save(
-                It.Is<Stream>(stream => ReferenceEquals(stream, workbookStream))))
+                It.Is<Stream>(stream => ReferenceEquals(stream, workbookStream)),
+                It.Is<string?>(outputPathOverride => outputPathOverride == null)))
             .Callback(() => saveCalls++)
             .Returns(expectedOutputPath);
 
@@ -124,7 +141,12 @@ public class MiniExcelReportRendererTests
                 It.Is<IReadOnlyDictionary<string, ExcelSheetLayout>>(layouts => ReferenceEquals(layouts, workbookData.Layouts))))
             .Callback(() => formatCalls++);
 
-        var sut = new MiniExcelReportRenderer(Options.Create(settings), composerMock.Object, fileStoreMock.Object, formatterMock.Object);
+        var sut = new MiniExcelReportRenderer(
+            Options.Create(settings),
+            composerMock.Object,
+            fileStoreMock.Object,
+            formatterMock.Object,
+            CreateReportRunContextAccessor());
 
         // Act
         sut.RenderReport(rows, statuses, statistics);
@@ -210,4 +232,14 @@ public class MiniExcelReportRendererTests
 
     private static string CreateTempDirectoryPath() =>
         Path.Combine(Path.GetTempPath(), $"nrb-excel-tests-{Guid.NewGuid():N}");
+
+    private static IReportRunContextAccessor CreateReportRunContextAccessor(string? excelOutputPathOverride = null)
+    {
+        var accessorMock = new Mock<IReportRunContextAccessor>(MockBehavior.Loose);
+        accessorMock
+            .SetupGet(x => x.Current)
+            .Returns(new NReleaseBuilder.Models.Rendering.ReportRunContext(
+                ExcelOutputPathOverride: excelOutputPathOverride));
+        return accessorMock.Object;
+    }
 }

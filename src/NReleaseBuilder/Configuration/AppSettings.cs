@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
+using NReleaseBuilder.Models.Rendering;
+
 namespace NReleaseBuilder.Configuration;
 
 /// <summary>
@@ -19,6 +21,12 @@ public sealed class AppSettings
     /// When empty, all components are included.
     /// </summary>
     public IReadOnlyList<string> CsvComponentNamesFilter { get; init; } = [];
+
+    /// <summary>
+    /// Optional grouped component filters with per-group report output names.
+    /// When populated, one report run is executed per group.
+    /// </summary>
+    public IReadOnlyList<CsvComponentGroupOptions> CsvComponentGroups { get; init; } = [];
 
     /// <summary>
     /// Bitbucket API options.
@@ -43,4 +51,26 @@ public sealed class AppSettings
     /// </summary>
     [Required]
     public ExcelOptions Excel { get; init; } = new();
+
+    /// <summary>
+    /// Builds report run definitions from grouped component settings.
+    /// </summary>
+    /// <returns>Report runs to execute.</returns>
+    public IReadOnlyList<ReportRunDefinition> BuildReportRuns()
+    {
+        if (CsvComponentGroups.Count == 0)
+        {
+            return [new ReportRunDefinition(null, null, null, null)];
+        }
+
+        return
+        [
+            .. CsvComponentGroups.Select(static group =>
+                new ReportRunDefinition(
+                    string.IsNullOrWhiteSpace(group.Name) ? null : group.Name.Trim(),
+                    group.ComponentNames,
+                    group.PdfOutputPath,
+                    group.ExcelOutputPath)),
+        ];
+    }
 }

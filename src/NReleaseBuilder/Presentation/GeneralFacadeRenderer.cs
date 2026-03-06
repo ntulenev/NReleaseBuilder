@@ -65,6 +65,10 @@ public sealed class GeneralFacadeRenderer : IRenderer
             totalRepositoryCount);
 
     /// <inheritdoc />
+    public void PrintRunHeading(string? runName, int runIndex, int totalRuns) =>
+        _consoleRenderer.PrintRunHeading(runName, runIndex, totalRuns);
+
+    /// <inheritdoc />
     public Task<T> RunBitbucketLoadingWithProgressAsync<T>(
         IReadOnlyList<RepositoryName> repositories,
         Func<BitbucketProgressCallbacks, Task<T>> operation) =>
@@ -72,6 +76,9 @@ public sealed class GeneralFacadeRenderer : IRenderer
 
     /// <inheritdoc />
     public void PrintNoRows() => _consoleRenderer.PrintNoRows();
+
+    /// <inheritdoc />
+    public void PrintNoRowsMatchedGroup(string runName) => _consoleRenderer.PrintNoRowsMatchedGroup(runName);
 
     /// <inheritdoc />
     public void PrintNoComponentsMatchedStatusFilter(IReadOnlyList<JiraStatusName> statuses) =>

@@ -39,6 +39,14 @@ public interface IConsoleOutputRenderer
         int totalRepositoryCount);
 
     /// <summary>
+    /// Prints a heading for the current report run group.
+    /// </summary>
+    /// <param name="runName">Run group name.</param>
+    /// <param name="runIndex">Zero-based run index.</param>
+    /// <param name="totalRuns">Total run count.</param>
+    void PrintRunHeading(string? runName, int runIndex, int totalRuns);
+
+    /// <summary>
     /// Runs an asynchronous operation with Bitbucket loading progress UI.
     /// </summary>
     /// <typeparam name="T">Result type.</typeparam>
@@ -53,6 +61,12 @@ public interface IConsoleOutputRenderer
     /// Prints a message when CSV has no rows.
     /// </summary>
     void PrintNoRows();
+
+    /// <summary>
+    /// Prints a message when CSV has no rows for a specific run group.
+    /// </summary>
+    /// <param name="runName">Run group name.</param>
+    void PrintNoRowsMatchedGroup(string runName);
 
     /// <summary>
     /// Prints a message when no component matches the Jira status filter.
