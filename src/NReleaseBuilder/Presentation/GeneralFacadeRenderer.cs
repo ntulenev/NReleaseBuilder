@@ -7,6 +7,7 @@ using NReleaseBuilder.Models;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 using NReleaseBuilder.Models.Jira;
+using NReleaseBuilder.Models.Rendering;
 
 namespace NReleaseBuilder.Presentation;
 
@@ -21,27 +22,37 @@ public sealed class GeneralFacadeRenderer : IRenderer
     /// <param name="consoleRenderer">Console renderer.</param>
     /// <param name="excelReportRenderer">Excel report renderer.</param>
     /// <param name="pdfReportRenderer">PDF report renderer.</param>
+    /// <param name="reportRunContextAccessor">Current report run context accessor.</param>
     /// <param name="jiraStatusStatisticsBuilder">Jira status statistics builder.</param>
     /// <param name="options">Application settings options.</param>
     public GeneralFacadeRenderer(
         IConsoleOutputRenderer consoleRenderer,
         IExcelReportRenderer excelReportRenderer,
         IPdfReportRenderer pdfReportRenderer,
+        IReportRunContextAccessor reportRunContextAccessor,
         IJiraStatusStatisticsBuilder jiraStatusStatisticsBuilder,
         IOptions<AppSettings> options)
     {
         ArgumentNullException.ThrowIfNull(consoleRenderer);
         ArgumentNullException.ThrowIfNull(excelReportRenderer);
         ArgumentNullException.ThrowIfNull(pdfReportRenderer);
+        ArgumentNullException.ThrowIfNull(reportRunContextAccessor);
         ArgumentNullException.ThrowIfNull(jiraStatusStatisticsBuilder);
         ArgumentNullException.ThrowIfNull(options);
 
         _consoleRenderer = consoleRenderer;
         _excelReportRenderer = excelReportRenderer;
         _pdfReportRenderer = pdfReportRenderer;
+        _reportRunContextAccessor = reportRunContextAccessor;
         _jiraStatusStatisticsBuilder = jiraStatusStatisticsBuilder;
         _settings = options.Value;
     }
+
+    /// <inheritdoc />
+    public void SetupContext(ReportRunDefinition reportRunDefinition) => _reportRunContextAccessor.Setup(reportRunDefinition);
+
+    /// <inheritdoc />
+    public void ResetContext() => _reportRunContextAccessor.Reset();
 
     /// <inheritdoc />
     public void RenderHeader() => _consoleRenderer.RenderHeader();
@@ -127,6 +138,7 @@ public sealed class GeneralFacadeRenderer : IRenderer
     private readonly IConsoleOutputRenderer _consoleRenderer;
     private readonly IExcelReportRenderer _excelReportRenderer;
     private readonly IPdfReportRenderer _pdfReportRenderer;
+    private readonly IReportRunContextAccessor _reportRunContextAccessor;
     private readonly IJiraStatusStatisticsBuilder _jiraStatusStatisticsBuilder;
     private readonly AppSettings _settings;
 }

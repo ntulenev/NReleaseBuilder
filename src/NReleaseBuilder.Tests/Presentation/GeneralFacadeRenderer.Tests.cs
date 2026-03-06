@@ -11,6 +11,7 @@ using NReleaseBuilder.Models;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 using NReleaseBuilder.Models.Jira;
+using NReleaseBuilder.Models.Rendering;
 using NReleaseBuilder.Presentation;
 
 namespace NReleaseBuilder.Tests.Presentation;
@@ -25,6 +26,7 @@ public class GeneralFacadeRendererTests
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
         var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
         var settings = CreateSettings();
 
@@ -37,7 +39,13 @@ public class GeneralFacadeRendererTests
 
         // Act
         var exception = Record.Exception(() =>
-            new GeneralFacadeRenderer(consoleRenderer, excelRenderer, pdfRenderer, statusStatisticsBuilder, optionsMock.Object));
+            new GeneralFacadeRenderer(
+                consoleRenderer,
+                excelRenderer,
+                pdfRenderer,
+                reportRunContextAccessor,
+                statusStatisticsBuilder,
+                optionsMock.Object));
 
         // Assert
         exception.Should().BeNull();
@@ -51,11 +59,18 @@ public class GeneralFacadeRendererTests
         // Arrange
         var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
         var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(null!, excelRenderer, pdfRenderer, statusStatisticsBuilder, options);
+        Action action = () => _ = new GeneralFacadeRenderer(
+            null!,
+            excelRenderer,
+            pdfRenderer,
+            reportRunContextAccessor,
+            statusStatisticsBuilder,
+            options);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -69,11 +84,18 @@ public class GeneralFacadeRendererTests
         // Arrange
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
         var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, null!, pdfRenderer, statusStatisticsBuilder, options);
+        Action action = () => _ = new GeneralFacadeRenderer(
+            consoleRenderer,
+            null!,
+            pdfRenderer,
+            reportRunContextAccessor,
+            statusStatisticsBuilder,
+            options);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -87,15 +109,47 @@ public class GeneralFacadeRendererTests
         // Arrange
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
         var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
         var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, excelRenderer, null!, statusStatisticsBuilder, options);
+        Action action = () => _ = new GeneralFacadeRenderer(
+            consoleRenderer,
+            excelRenderer,
+            null!,
+            reportRunContextAccessor,
+            statusStatisticsBuilder,
+            options);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
             .WithParameterName("pdfReportRenderer");
+    }
+
+    [Fact(DisplayName = "GeneralFacadeRenderer cant be created with null report run context accessor.")]
+    [Trait("Category", "Unit")]
+    public void GeneralFacadeRendererCantBeCreatedWithNullReportRunContextAccessor()
+    {
+        // Arrange
+        var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
+        var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
+        var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
+
+        // Act
+        Action action = () => _ = new GeneralFacadeRenderer(
+            consoleRenderer,
+            excelRenderer,
+            pdfRenderer,
+            null!,
+            statusStatisticsBuilder,
+            options);
+
+        // Assert
+        action.Should().Throw<ArgumentNullException>()
+            .WithParameterName("reportRunContextAccessor");
     }
 
     [Fact(DisplayName = "GeneralFacadeRenderer cant be created with null jira status statistics builder.")]
@@ -106,10 +160,17 @@ public class GeneralFacadeRendererTests
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
         var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
         var options = new Mock<IOptions<AppSettings>>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, excelRenderer, pdfRenderer, null!, options);
+        Action action = () => _ = new GeneralFacadeRenderer(
+            consoleRenderer,
+            excelRenderer,
+            pdfRenderer,
+            reportRunContextAccessor,
+            null!,
+            options);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -124,10 +185,17 @@ public class GeneralFacadeRendererTests
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
         var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new GeneralFacadeRenderer(consoleRenderer, excelRenderer, pdfRenderer, statusStatisticsBuilder, null!);
+        Action action = () => _ = new GeneralFacadeRenderer(
+            consoleRenderer,
+            excelRenderer,
+            pdfRenderer,
+            reportRunContextAccessor,
+            statusStatisticsBuilder,
+            null!);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -146,9 +214,16 @@ public class GeneralFacadeRendererTests
         var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
         var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
 
-        var sut = new GeneralFacadeRenderer(consoleRenderer, excelRenderer, pdfRenderer, statusStatisticsBuilder, optionsMock.Object);
+        var sut = new GeneralFacadeRenderer(
+            consoleRenderer,
+            excelRenderer,
+            pdfRenderer,
+            reportRunContextAccessor,
+            statusStatisticsBuilder,
+            optionsMock.Object);
 
         // Act
         Action action = () => sut.RenderResults(null!);
@@ -234,9 +309,16 @@ public class GeneralFacadeRendererTests
 
         var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
         var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
         var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
 
-        var sut = new GeneralFacadeRenderer(consoleRendererMock.Object, excelRenderer, pdfRenderer, statusStatisticsBuilder, optionsMock.Object);
+        var sut = new GeneralFacadeRenderer(
+            consoleRendererMock.Object,
+            excelRenderer,
+            pdfRenderer,
+            reportRunContextAccessor,
+            statusStatisticsBuilder,
+            optionsMock.Object);
 
         // Act
         sut.RenderHeader();
@@ -264,6 +346,59 @@ public class GeneralFacadeRendererTests
         renderTableCalls.Should().Be(1);
         renderSummaryCalls.Should().Be(1);
         printErrorCalls.Should().Be(1);
+    }
+
+    [Fact(DisplayName = "GeneralFacadeRenderer delegates context lifecycle methods to report run context accessor.")]
+    [Trait("Category", "Unit")]
+    public void DelegatesContextLifecycleMethodsToReportRunContextAccessor()
+    {
+        // Arrange
+        var settings = CreateSettings();
+        var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
+        optionsMock.Setup(x => x.Value).Returns(settings);
+
+        var setupContextCalls = 0;
+        var resetContextCalls = 0;
+        ReportRunDefinition? capturedDefinition = null;
+        var expectedDefinition = new ReportRunDefinition(
+            Name: "Group A",
+            ComponentNamesFilter: ["api"],
+            PdfOutputPathOverride: "out.pdf",
+            ExcelOutputPathOverride: "out.xlsx");
+
+        var reportRunContextAccessorMock = new Mock<IReportRunContextAccessor>(MockBehavior.Strict);
+        reportRunContextAccessorMock
+            .Setup(x => x.Setup(It.Is<ReportRunDefinition>(definition => definition == expectedDefinition)))
+            .Callback<ReportRunDefinition>(definition =>
+            {
+                setupContextCalls++;
+                capturedDefinition = definition;
+            });
+        reportRunContextAccessorMock
+            .Setup(x => x.Reset())
+            .Callback(() => resetContextCalls++);
+
+        var consoleRenderer = new Mock<IConsoleOutputRenderer>(MockBehavior.Strict).Object;
+        var excelRenderer = new Mock<IExcelReportRenderer>(MockBehavior.Strict).Object;
+        var pdfRenderer = new Mock<IPdfReportRenderer>(MockBehavior.Strict).Object;
+        var statusStatisticsBuilder = new Mock<IJiraStatusStatisticsBuilder>(MockBehavior.Strict).Object;
+
+        var sut = new GeneralFacadeRenderer(
+            consoleRenderer,
+            excelRenderer,
+            pdfRenderer,
+            reportRunContextAccessorMock.Object,
+            statusStatisticsBuilder,
+            optionsMock.Object);
+
+        // Act
+        sut.SetupContext(expectedDefinition);
+        sut.ResetContext();
+
+        // Assert
+        setupContextCalls.Should().Be(1);
+        capturedDefinition.Should().Be(expectedDefinition);
+        resetContextCalls.Should().Be(1);
     }
 
     [Fact(DisplayName = "GeneralFacadeRenderer RenderResults prints empty-state diagnostics when no rows match allowed statuses.")]
@@ -327,11 +462,13 @@ public class GeneralFacadeRendererTests
             .Setup(x => x.Build(It.Is<IReadOnlyList<ComponentCheckRow>>(inputRows => ReferenceEquals(inputRows, rows))))
             .Callback<IReadOnlyList<ComponentCheckRow>>(inputRows => buildCalls++)
             .Returns(statistics);
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
 
         var sut = new GeneralFacadeRenderer(
             consoleRendererMock.Object,
             excelRendererMock.Object,
             pdfRendererMock.Object,
+            reportRunContextAccessor,
             statisticsBuilderMock.Object,
             optionsMock.Object);
 
@@ -411,11 +548,13 @@ public class GeneralFacadeRendererTests
             .Setup(x => x.Build(It.Is<IReadOnlyList<ComponentCheckRow>>(inputRows => ReferenceEquals(inputRows, rows))))
             .Callback<IReadOnlyList<ComponentCheckRow>>(inputRows => buildCalls++)
             .Returns(statistics);
+        var reportRunContextAccessor = new Mock<IReportRunContextAccessor>(MockBehavior.Strict).Object;
 
         var sut = new GeneralFacadeRenderer(
             consoleRendererMock.Object,
             excelRendererMock.Object,
             pdfRendererMock.Object,
+            reportRunContextAccessor,
             statisticsBuilderMock.Object,
             optionsMock.Object);
 

@@ -23,28 +23,24 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     /// <param name="repositoryNameNormalizer">Component-row repository name normalizer.</param>
     /// <param name="componentsVersionBuilder">Component version rows builder.</param>
     /// <param name="renderer">Application renderer.</param>
-    /// <param name="reportRunContextAccessor">Current report run context accessor.</param>
     /// <param name="options">Application settings options.</param>
     public VersionCheckApplication(
         ICsvComponentReader csvReader,
         IRepositoryNameNormalizer repositoryNameNormalizer,
         IComponentsVersionBuilder componentsVersionBuilder,
         IRenderer renderer,
-        IReportRunContextAccessor reportRunContextAccessor,
         IOptions<AppSettings> options)
     {
         ArgumentNullException.ThrowIfNull(csvReader);
         ArgumentNullException.ThrowIfNull(repositoryNameNormalizer);
         ArgumentNullException.ThrowIfNull(componentsVersionBuilder);
         ArgumentNullException.ThrowIfNull(renderer);
-        ArgumentNullException.ThrowIfNull(reportRunContextAccessor);
         ArgumentNullException.ThrowIfNull(options);
 
         _csvReader = csvReader;
         _repositoryNameNormalizer = repositoryNameNormalizer;
         _componentsVersionBuilder = componentsVersionBuilder;
         _renderer = renderer;
-        _reportRunContextAccessor = reportRunContextAccessor;
         _settings = options.Value;
     }
 
@@ -82,7 +78,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
             _renderer.PrintRunHeading(reportRun.Name, runIndex, totalRunCount);
         }
 
-        _reportRunContextAccessor.Setup(reportRun);
+        _renderer.SetupContext(reportRun);
 
         try
         {
@@ -118,7 +114,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
         }
         finally
         {
-            _reportRunContextAccessor.Reset();
+            _renderer.ResetContext();
         }
     }
 
@@ -145,7 +141,6 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     private readonly IRepositoryNameNormalizer _repositoryNameNormalizer;
     private readonly IComponentsVersionBuilder _componentsVersionBuilder;
     private readonly IRenderer _renderer;
-    private readonly IReportRunContextAccessor _reportRunContextAccessor;
     private readonly AppSettings _settings;
 
 }

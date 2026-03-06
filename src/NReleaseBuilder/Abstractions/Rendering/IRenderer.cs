@@ -4,6 +4,7 @@ using NReleaseBuilder.Models;
 using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 using NReleaseBuilder.Models.Jira;
+using NReleaseBuilder.Models.Rendering;
 
 namespace NReleaseBuilder.Abstractions.Rendering;
 
@@ -12,6 +13,17 @@ namespace NReleaseBuilder.Abstractions.Rendering;
 /// </summary>
 public interface IRenderer
 {
+    /// <summary>
+    /// Sets up rendering context for current report run.
+    /// </summary>
+    /// <param name="reportRunDefinition">Report run definition.</param>
+    void SetupContext(ReportRunDefinition reportRunDefinition);
+
+    /// <summary>
+    /// Resets rendering context to default values.
+    /// </summary>
+    void ResetContext();
+
     /// <summary>
     /// Renders the initial run header.
     /// </summary>

@@ -35,7 +35,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             componentsVersionBuilder,
             renderer,
-            CreateReportRunContextAccessor(),
             CreateOptions()));
 
         // Assert
@@ -56,7 +55,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             componentsVersionBuilder,
             renderer,
-            CreateReportRunContextAccessor(),
             CreateOptions()));
 
         // Assert
@@ -77,7 +75,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             null!,
             renderer,
-            CreateReportRunContextAccessor(),
             CreateOptions()));
 
         // Assert
@@ -98,7 +95,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             componentsVersionBuilder,
             null!,
-            CreateReportRunContextAccessor(),
             CreateOptions()));
 
         // Assert
@@ -120,7 +116,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             componentsVersionBuilder,
             renderer,
-            CreateReportRunContextAccessor(),
             null!));
 
         // Assert
@@ -143,6 +138,10 @@ public class VersionCheckApplicationTests
         var componentsVersionBuilderMock = new Mock<IComponentsVersionBuilder>(MockBehavior.Strict);
         var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
         rendererMock
+            .Setup(x => x.SetupContext(It.IsAny<ReportRunDefinition>()));
+        rendererMock
+            .Setup(x => x.ResetContext());
+        rendererMock
             .Setup(x => x.RenderHeader())
             .Callback(() => renderHeaderCount++);
         rendererMock
@@ -155,7 +154,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             componentsVersionBuilderMock.Object,
             rendererMock.Object,
-            CreateReportRunContextAccessor(),
             CreateOptions());
 
         // Act
@@ -186,6 +184,10 @@ public class VersionCheckApplicationTests
         var componentsVersionBuilderMock = new Mock<IComponentsVersionBuilder>(MockBehavior.Strict);
         var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
         rendererMock
+            .Setup(x => x.SetupContext(It.IsAny<ReportRunDefinition>()));
+        rendererMock
+            .Setup(x => x.ResetContext());
+        rendererMock
             .Setup(x => x.RenderHeader())
             .Callback(() => renderHeaderCount++);
         rendererMock
@@ -197,7 +199,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             componentsVersionBuilderMock.Object,
             rendererMock.Object,
-            CreateReportRunContextAccessor(),
             CreateOptions());
 
         // Act
@@ -257,6 +258,10 @@ public class VersionCheckApplicationTests
 
         var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
         rendererMock
+            .Setup(x => x.SetupContext(It.IsAny<ReportRunDefinition>()));
+        rendererMock
+            .Setup(x => x.ResetContext());
+        rendererMock
             .Setup(x => x.RenderHeader())
             .Callback(() => renderHeaderCount++);
         rendererMock
@@ -267,7 +272,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             componentsVersionBuilderMock.Object,
             rendererMock.Object,
-            CreateReportRunContextAccessor(),
             CreateOptions());
 
         // Act
@@ -372,6 +376,10 @@ public class VersionCheckApplicationTests
 
         var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
         rendererMock
+            .Setup(x => x.SetupContext(It.IsAny<ReportRunDefinition>()));
+        rendererMock
+            .Setup(x => x.ResetContext());
+        rendererMock
             .Setup(x => x.RenderHeader())
             .Callback(() => renderHeaderCount++);
         rendererMock
@@ -389,7 +397,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(),
             componentsVersionBuilderMock.Object,
             rendererMock.Object,
-            CreateReportRunContextAccessor(),
             CreateOptions());
 
         // Act
@@ -456,6 +463,10 @@ public class VersionCheckApplicationTests
 
         var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
         rendererMock
+            .Setup(x => x.SetupContext(It.IsAny<ReportRunDefinition>()));
+        rendererMock
+            .Setup(x => x.ResetContext());
+        rendererMock
             .Setup(x => x.RenderHeader());
         rendererMock
             .Setup(x => x.PrintRepositoryCheckCount(It.Is<int>(count => count == 1)));
@@ -467,7 +478,6 @@ public class VersionCheckApplicationTests
             CreateRepositoryNameNormalizer(repositoryNameOverrides),
             componentsVersionBuilderMock.Object,
             rendererMock.Object,
-            CreateReportRunContextAccessor(),
             CreateOptions(repositoryNameOverrides));
 
         // Act
@@ -486,25 +496,6 @@ public class VersionCheckApplicationTests
     private static RepositoryNameNormalizer CreateRepositoryNameNormalizer(
         IReadOnlyDictionary<string, string>? repositoryNameOverrides = null) =>
         new(CreateOptions(repositoryNameOverrides));
-
-    private static IReportRunContextAccessor CreateReportRunContextAccessor()
-    {
-        var mock = new Mock<IReportRunContextAccessor>(MockBehavior.Loose);
-        var current = ReportRunContext.Empty;
-        mock
-            .SetupGet(x => x.Current)
-            .Returns(() => current);
-        mock
-            .Setup(x => x.Setup(It.IsAny<ReportRunDefinition>()))
-            .Callback<ReportRunDefinition>(reportRun => current = new ReportRunContext(
-                reportRun.Name,
-                reportRun.PdfOutputPathOverride,
-                reportRun.ExcelOutputPathOverride));
-        mock
-            .Setup(x => x.Reset())
-            .Callback(() => current = ReportRunContext.Empty);
-        return mock.Object;
-    }
 
     private static IOptions<AppSettings> CreateOptions(
         IReadOnlyDictionary<string, string>? repositoryNameOverrides = null)
