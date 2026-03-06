@@ -23,28 +23,28 @@ public sealed class GeneralFacadeRenderer : IRenderer
     /// <param name="excelReportRenderer">Excel report renderer.</param>
     /// <param name="pdfReportRenderer">PDF report renderer.</param>
     /// <param name="reportRunContextAccessor">Current report run context accessor.</param>
-    /// <param name="jiraStatusStatisticsBuilder">Jira status statistics builder.</param>
+    /// <param name="jiraStatusStatisticsConverter">Jira status statistics converter.</param>
     /// <param name="options">Application settings options.</param>
     public GeneralFacadeRenderer(
         IConsoleOutputRenderer consoleRenderer,
         IExcelReportRenderer excelReportRenderer,
         IPdfReportRenderer pdfReportRenderer,
         IReportRunContextAccessor reportRunContextAccessor,
-        IJiraStatusStatisticsBuilder jiraStatusStatisticsBuilder,
+        IJiraStatusStatisticsConverter jiraStatusStatisticsConverter,
         IOptions<AppSettings> options)
     {
         ArgumentNullException.ThrowIfNull(consoleRenderer);
         ArgumentNullException.ThrowIfNull(excelReportRenderer);
         ArgumentNullException.ThrowIfNull(pdfReportRenderer);
         ArgumentNullException.ThrowIfNull(reportRunContextAccessor);
-        ArgumentNullException.ThrowIfNull(jiraStatusStatisticsBuilder);
+        ArgumentNullException.ThrowIfNull(jiraStatusStatisticsConverter);
         ArgumentNullException.ThrowIfNull(options);
 
         _consoleRenderer = consoleRenderer;
         _excelReportRenderer = excelReportRenderer;
         _pdfReportRenderer = pdfReportRenderer;
         _reportRunContextAccessor = reportRunContextAccessor;
-        _jiraStatusStatisticsBuilder = jiraStatusStatisticsBuilder;
+        _jiraStatusStatisticsConverter = jiraStatusStatisticsConverter;
         _settings = options.Value;
     }
 
@@ -108,7 +108,7 @@ public sealed class GeneralFacadeRenderer : IRenderer
 
         var allowedStatuses = _settings.Jira.BuildAllowedStatuses();
         var filteredRows = rows.FilterRowsByAllowedJiraStatuses(allowedStatuses);
-        var statusStatistics = _jiraStatusStatisticsBuilder.Build(rows);
+        var statusStatistics = _jiraStatusStatisticsConverter.Convert(rows);
 
         if (filteredRows.Length == 0)
         {
@@ -139,6 +139,6 @@ public sealed class GeneralFacadeRenderer : IRenderer
     private readonly IExcelReportRenderer _excelReportRenderer;
     private readonly IPdfReportRenderer _pdfReportRenderer;
     private readonly IReportRunContextAccessor _reportRunContextAccessor;
-    private readonly IJiraStatusStatisticsBuilder _jiraStatusStatisticsBuilder;
+    private readonly IJiraStatusStatisticsConverter _jiraStatusStatisticsConverter;
     private readonly AppSettings _settings;
 }

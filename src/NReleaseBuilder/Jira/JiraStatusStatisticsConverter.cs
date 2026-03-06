@@ -5,12 +5,12 @@ using NReleaseBuilder.Models.Jira;
 namespace NReleaseBuilder.Jira;
 
 /// <summary>
-/// Builds aggregate Jira status statistics for component check rows.
+/// Converts component check rows into aggregate Jira status statistics.
 /// </summary>
-public sealed class JiraStatusStatisticsBuilder : IJiraStatusStatisticsBuilder
+public sealed class JiraStatusStatisticsConverter : IJiraStatusStatisticsConverter
 {
     /// <inheritdoc />
-    public Dictionary<JiraStatusName, int> Build(IReadOnlyList<ComponentCheckRow> rows)
+    public Dictionary<JiraStatusName, int> Convert(IReadOnlyList<ComponentCheckRow> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);
 

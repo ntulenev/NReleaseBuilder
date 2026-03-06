@@ -6,14 +6,14 @@ using NReleaseBuilder.Models.Jira;
 namespace NReleaseBuilder.Abstractions.Jira;
 
 /// <summary>
-/// Builds Jira status statistics from component check rows.
+/// Converts component check rows to Jira status statistics.
 /// </summary>
-public interface IJiraStatusStatisticsBuilder
+public interface IJiraStatusStatisticsConverter
 {
     /// <summary>
-    /// Builds Jira status counters from newer versions in component check rows.
+    /// Converts newer versions in component check rows to Jira status counters.
     /// </summary>
     /// <param name="rows">Component check rows.</param>
     /// <returns>Status counters by Jira status name.</returns>
-    Dictionary<JiraStatusName, int> Build(IReadOnlyList<ComponentCheckRow> rows);
+    Dictionary<JiraStatusName, int> Convert(IReadOnlyList<ComponentCheckRow> rows);
 }

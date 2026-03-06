@@ -71,7 +71,7 @@ builder.Services.AddTransient<IRepositoryNameNormalizer, RepositoryNameNormalize
 builder.Services.AddTransient<IRepositoryTagLookupBatchLoader, RepositoryTagLookupBatchLoader>();
 builder.Services.AddTransient<IComponentVersionChecker, ComponentVersionChecker>();
 builder.Services.AddTransient<IComponentsVersionBuilder, ComponentsVersionBuilder>();
-builder.Services.AddTransient<IJiraStatusStatisticsBuilder, JiraStatusStatisticsBuilder>();
+builder.Services.AddTransient<IJiraStatusStatisticsConverter, JiraStatusStatisticsConverter>();
 builder.Services.AddSingleton<IReportRunContextAccessor, ReportRunContextAccessor>();
 builder.Services.AddTransient<IConsoleOutputRenderer, SpectreConsoleOutputRenderer>();
 builder.Services.AddTransient<IExcelContentComposer, MiniExcelContentComposer>();

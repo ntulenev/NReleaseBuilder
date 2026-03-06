@@ -7,29 +7,29 @@ using NReleaseBuilder.Models.Jira;
 
 namespace NReleaseBuilder.Tests.Jira;
 
-public class JiraStatusStatisticsBuilderTests
+public class JiraStatusStatisticsConverterTests
 {
-    [Fact(DisplayName = "JiraStatusStatisticsBuilder Build throws when rows are null.")]
+    [Fact(DisplayName = "JiraStatusStatisticsConverter Convert throws when rows are null.")]
     [Trait("Category", "Unit")]
-    public void BuildThrowsWhenRowsAreNull()
+    public void ConvertThrowsWhenRowsAreNull()
     {
         // Arrange
-        var sut = new JiraStatusStatisticsBuilder();
+        var sut = new JiraStatusStatisticsConverter();
 
         // Act
-        Action action = () => _ = sut.Build(null!);
+        Action action = () => _ = sut.Convert(null!);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
             .WithParameterName("rows");
     }
 
-    [Fact(DisplayName = "JiraStatusStatisticsBuilder Build returns empty dictionary for rows without newer versions.")]
+    [Fact(DisplayName = "JiraStatusStatisticsConverter Convert returns empty dictionary for rows without newer versions.")]
     [Trait("Category", "Unit")]
-    public void BuildReturnsEmptyDictionaryForRowsWithoutNewerVersions()
+    public void ConvertReturnsEmptyDictionaryForRowsWithoutNewerVersions()
     {
         // Arrange
-        var sut = new JiraStatusStatisticsBuilder();
+        var sut = new JiraStatusStatisticsConverter();
         IReadOnlyList<ComponentCheckRow> rows =
         [
             CreateRow(1, []),
@@ -37,18 +37,18 @@ public class JiraStatusStatisticsBuilderTests
         ];
 
         // Act
-        var result = sut.Build(rows);
+        var result = sut.Convert(rows);
 
         // Assert
         result.Should().BeEmpty();
     }
 
-    [Fact(DisplayName = "JiraStatusStatisticsBuilder Build aggregates split statuses across rows.")]
+    [Fact(DisplayName = "JiraStatusStatisticsConverter Convert aggregates split statuses across rows.")]
     [Trait("Category", "Unit")]
-    public void BuildAggregatesSplitStatusesAcrossRows()
+    public void ConvertAggregatesSplitStatusesAcrossRows()
     {
         // Arrange
-        var sut = new JiraStatusStatisticsBuilder();
+        var sut = new JiraStatusStatisticsConverter();
         IReadOnlyList<ComponentCheckRow> rows =
         [
             CreateRow(1,
@@ -63,7 +63,7 @@ public class JiraStatusStatisticsBuilderTests
         ];
 
         // Act
-        var result = sut.Build(rows);
+        var result = sut.Convert(rows);
 
         // Assert
         result.Should().HaveCount(3);
