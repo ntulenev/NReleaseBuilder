@@ -81,9 +81,9 @@ public class HttpRetryExecutorTests
         handler.CallCount.Should().Be(2);
     }
 
-    [Fact(DisplayName = "HttpRetryExecutor GetAsync retries forbidden status and returns next response.")]
+    [Fact(DisplayName = "HttpRetryExecutor GetAsync does not retry forbidden status.")]
     [Trait("Category", "Unit")]
-    public async Task GetAsyncRetriesForbiddenStatusAndReturnsNextResponse()
+    public async Task GetAsyncDoesNotRetryForbiddenStatus()
     {
         // Arrange
         var forbidden = new HttpResponseMessage(HttpStatusCode.Forbidden);
@@ -99,8 +99,8 @@ public class HttpRetryExecutorTests
         using var response = await sut.GetAsync(httpClient, requestUri, 1, CancellationToken.None);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        handler.CallCount.Should().Be(2);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        handler.CallCount.Should().Be(1);
     }
 
     [Fact(DisplayName = "HttpRetryExecutor GetAsync retries http request exception and succeeds.")]
