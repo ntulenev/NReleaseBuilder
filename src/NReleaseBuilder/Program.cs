@@ -85,9 +85,28 @@ builder.Services.AddTransient<IRenderer, GeneralFacadeRenderer>();
 builder.Services.AddTransient<IVersionCheckApplication, VersionCheckApplication>();
 
 using var host = builder.Build();
+using var cancellationSource = new CancellationTokenSource();
 
-var app = host.Services.GetRequiredService<IVersionCheckApplication>();
-return await app.RunAsync(CancellationToken.None).ConfigureAwait(false);
+ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
+{
+    eventArgs.Cancel = true;
+    cancellationSource.Cancel();
+};
+Console.CancelKeyPress += cancelHandler;
+
+try
+{
+    var app = host.Services.GetRequiredService<IVersionCheckApplication>();
+    return await app.RunAsync(cancellationSource.Token).ConfigureAwait(false);
+}
+catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
+{
+    return 130;
+}
+finally
+{
+    Console.CancelKeyPress -= cancelHandler;
+}
 
 static AuthenticationHeaderValue BuildAuthHeader(string authEmail, string authApiToken)
 {
