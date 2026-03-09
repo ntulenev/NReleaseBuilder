@@ -397,7 +397,7 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(taskReference);
 
-        var taskValues = SplitTaskValues(taskReference);
+        var taskValues = JiraTaskParsingHelpers.SplitTaskValues(taskReference);
         if (taskValues.Length == 0)
         {
             var fallbackSpan = text.Span(taskReference);
@@ -460,7 +460,7 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
 
         var currentIndex = 0;
 
-        foreach (Match browseUrlMatch in JiraBrowseUrlRegex().Matches(details))
+        foreach (Match browseUrlMatch in JiraTaskParsingHelpers.MatchJiraBrowseUrls(details))
         {
             if (browseUrlMatch.Index > currentIndex)
             {
@@ -493,7 +493,7 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
 
         var currentIndex = 0;
 
-        foreach (Match taskMatch in JiraTaskKeyRegex().Matches(segment))
+        foreach (Match taskMatch in JiraTaskParsingHelpers.MatchJiraTaskKeys(segment))
         {
             if (taskMatch.Index > currentIndex)
             {
@@ -525,19 +525,9 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
             .FontColor(JIRA_LINK_COLOR_HEX)
             .Underline();
 
-    [GeneratedRegex(
-        @"https?://[^\s\)\]\}<>""']+/browse/(?<task>[A-Za-z][A-Za-z0-9_]*-\d+)(?![A-Za-z0-9_])",
-        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
-    private static partial Regex JiraBrowseUrlRegex();
-
-    [GeneratedRegex(
-        @"(?<![A-Za-z0-9_])(?<task>[A-Za-z][A-Za-z0-9_]*-\d+)(?![A-Za-z0-9_])",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex JiraTaskKeyRegex();
-
     private bool TryBuildJiraBrowseTaskUrl(string taskValue, out string taskUrl)
     {
-        if (_jiraBrowseBaseUrl is null || !IsTrackableJiraTask(taskValue))
+        if (_jiraBrowseBaseUrl is null || !JiraTaskParsingHelpers.IsTrackableJiraTask(taskValue))
         {
             taskUrl = string.Empty;
             return false;
@@ -552,51 +542,6 @@ public sealed partial class PdfContentComposer : IPdfContentComposer
         ArgumentNullException.ThrowIfNull(baseUrl);
 
         return new Uri(baseUrl.ToString().TrimEnd('/') + "/", UriKind.Absolute);
-    }
-
-    private static string[] SplitTaskValues(string value) =>
-    [
-        .. value
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(static x => !string.IsNullOrWhiteSpace(x))
-    ];
-
-    private static bool IsTrackableJiraTask(string taskKey)
-    {
-        if (string.Equals(taskKey, JiraTaskReference.NotAvailable.Value, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var dashIndex = taskKey.IndexOf('-', StringComparison.Ordinal);
-        if (dashIndex <= 0 || dashIndex == taskKey.Length - 1)
-        {
-            return false;
-        }
-
-        if (!char.IsLetter(taskKey[0]))
-        {
-            return false;
-        }
-
-        for (var i = 1; i < dashIndex; i++)
-        {
-            var symbol = taskKey[i];
-            if (!char.IsLetterOrDigit(symbol) && symbol != '_')
-            {
-                return false;
-            }
-        }
-
-        for (var i = dashIndex + 1; i < taskKey.Length; i++)
-        {
-            if (!char.IsDigit(taskKey[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private readonly Uri? _jiraBrowseBaseUrl;

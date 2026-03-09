@@ -337,14 +337,14 @@ public sealed partial class MiniExcelContentComposer : IExcelContentComposer
 
         var cellReference = ToCellReference(columnIndex, rowIndex);
 
-        foreach (Match browseUrlMatch in JiraBrowseUrlRegex().Matches(details))
+        foreach (Match browseUrlMatch in JiraTaskParsingHelpers.MatchJiraBrowseUrls(details))
         {
             layout.Hyperlinks[cellReference] = browseUrlMatch.Value;
             layout.Comments[cellReference] = "Contains Jira link: " + browseUrlMatch.Value;
             return;
         }
 
-        foreach (Match taskMatch in JiraTaskKeyRegex().Matches(details))
+        foreach (Match taskMatch in JiraTaskParsingHelpers.MatchJiraTaskKeys(details))
         {
             if (TryBuildSingleTaskUrl(taskMatch.Groups["task"].Value, out var taskUrl))
             {
@@ -511,8 +511,8 @@ public sealed partial class MiniExcelContentComposer : IExcelContentComposer
 
     private bool TryBuildSingleTaskUrl(string taskValue, out string taskUrl)
     {
-        var taskValues = SplitTaskValues(taskValue);
-        if (taskValues.Length != 1 || !IsTrackableJiraTask(taskValues[0]))
+        var taskValues = JiraTaskParsingHelpers.SplitTaskValues(taskValue);
+        if (taskValues.Length != 1 || !JiraTaskParsingHelpers.IsTrackableJiraTask(taskValues[0]))
         {
             taskUrl = string.Empty;
             return false;
@@ -528,61 +528,6 @@ public sealed partial class MiniExcelContentComposer : IExcelContentComposer
 
         return new Uri(baseUrl.ToString().TrimEnd('/') + "/", UriKind.Absolute);
     }
-
-    private static string[] SplitTaskValues(string value) =>
-    [
-        .. value
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(static x => !string.IsNullOrWhiteSpace(x))
-    ];
-
-    private static bool IsTrackableJiraTask(string taskKey)
-    {
-        if (string.Equals(taskKey, JiraTaskReference.NotAvailable.Value, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var dashIndex = taskKey.IndexOf('-', StringComparison.Ordinal);
-        if (dashIndex <= 0 || dashIndex == taskKey.Length - 1)
-        {
-            return false;
-        }
-
-        if (!char.IsLetter(taskKey[0]))
-        {
-            return false;
-        }
-
-        for (var i = 1; i < dashIndex; i++)
-        {
-            var symbol = taskKey[i];
-            if (!char.IsLetterOrDigit(symbol) && symbol != '_')
-            {
-                return false;
-            }
-        }
-
-        for (var i = dashIndex + 1; i < taskKey.Length; i++)
-        {
-            if (!char.IsDigit(taskKey[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    [GeneratedRegex(
-        @"https?://[^\s\)\]\}<>""']+/browse/(?<task>[A-Za-z][A-Za-z0-9_]*-\d+)(?![A-Za-z0-9_])",
-        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
-    private static partial Regex JiraBrowseUrlRegex();
-
-    [GeneratedRegex(
-        @"(?<![A-Za-z0-9_])(?<task>[A-Za-z][A-Za-z0-9_]*-\d+)(?![A-Za-z0-9_])",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex JiraTaskKeyRegex();
 
     private static string ToCellReference(int columnIndex, int rowIndex) =>
         ToColumnName(columnIndex) + rowIndex.ToString(CultureInfo.InvariantCulture);

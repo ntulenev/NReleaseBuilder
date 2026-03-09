@@ -144,7 +144,7 @@ internal static class PresentationHelpers
                 for (var i = 0; i < taskKeys.Length; i++)
                 {
                     var taskKey = taskKeys[i];
-                    if (!IsTrackableJiraTask(taskKey))
+                    if (!JiraTaskParsingHelpers.IsTrackableJiraTask(taskKey))
                     {
                         continue;
                     }
@@ -242,41 +242,4 @@ internal static class PresentationHelpers
         return statusNames[statusIndex];
     }
 
-    private static bool IsTrackableJiraTask(string taskKey)
-    {
-        if (string.Equals(taskKey, "N/A", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var dashIndex = taskKey.IndexOf('-', StringComparison.Ordinal);
-        if (dashIndex <= 0 || dashIndex == taskKey.Length - 1)
-        {
-            return false;
-        }
-
-        if (!char.IsLetter(taskKey[0]))
-        {
-            return false;
-        }
-
-        for (var i = 1; i < dashIndex; i++)
-        {
-            var symbol = taskKey[i];
-            if (!char.IsLetterOrDigit(symbol) && symbol != '_')
-            {
-                return false;
-            }
-        }
-
-        for (var i = dashIndex + 1; i < taskKey.Length; i++)
-        {
-            if (!char.IsDigit(taskKey[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
 }
