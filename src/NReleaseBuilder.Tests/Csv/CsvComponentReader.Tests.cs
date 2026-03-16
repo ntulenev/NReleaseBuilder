@@ -70,52 +70,6 @@ public class CsvComponentReaderTests
             .WithParameterName("renderer");
     }
 
-    [Fact(DisplayName = "CsvComponentReader cant be created with null settings value.")]
-    [Trait("Category", "Unit")]
-    public void CsvComponentReaderCantBeCreatedWithNullSettingsValue()
-    {
-        // Arrange
-        var optionsValueReadCount = 0;
-        var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
-        optionsMock
-            .Setup(x => x.Value)
-            .Callback(() => optionsValueReadCount++)
-            .Returns((AppSettings)null!);
-
-        var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
-
-        // Act
-        Action action = () => _ = new CsvComponentReader(optionsMock.Object, renderer);
-
-        // Assert
-        action.Should().Throw<ArgumentNullException>()
-            .WithParameterName("settings");
-        optionsValueReadCount.Should().Be(1);
-    }
-
-    [Fact(DisplayName = "CsvComponentReader cant be created with empty csv path.")]
-    [Trait("Category", "Unit")]
-    public void CsvComponentReaderCantBeCreatedWithEmptyCsvPath()
-    {
-        // Arrange
-        var settings = CreateSettings(" ");
-        var optionsValueReadCount = 0;
-        var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
-        optionsMock
-            .Setup(x => x.Value)
-            .Callback(() => optionsValueReadCount++)
-            .Returns(settings);
-
-        var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
-
-        // Act
-        Action action = () => _ = new CsvComponentReader(optionsMock.Object, renderer);
-
-        // Assert
-        action.Should().Throw<ArgumentException>();
-        optionsValueReadCount.Should().Be(1);
-    }
-
     [Fact(DisplayName = "CsvComponentReader Read returns parsed distinct rows sorted by component.")]
     [Trait("Category", "Integration")]
     public void ReadReturnsParsedDistinctRowsSortedByComponent()

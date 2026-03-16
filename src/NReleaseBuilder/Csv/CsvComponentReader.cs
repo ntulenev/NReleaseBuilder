@@ -33,13 +33,9 @@ public sealed class CsvComponentReader : ICsvComponentReader
         ArgumentNullException.ThrowIfNull(renderer);
 
         var settings = options.Value;
-        ArgumentNullException.ThrowIfNull(settings);
 
         _targetCsvFilePath = settings.TargetCsvFilePath.Trim();
-        ArgumentException.ThrowIfNullOrWhiteSpace(_targetCsvFilePath);
-
         _devCsvFilePath = settings.DevCsvFilePath.Trim();
-        ArgumentException.ThrowIfNullOrWhiteSpace(_devCsvFilePath);
         _defaultComponentNamesFilter = BuildComponentNamesFilter(settings.CsvComponentNamesFilter);
         _renderer = renderer;
     }
