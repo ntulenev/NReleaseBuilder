@@ -278,7 +278,7 @@ public class QuestPdfReportRendererTests
             new RepositoryName($"repo-{index}"),
             new VersionLabel("1.0.0"),
             status,
-            new RowDetails("-"),
+            RowDetails.CreatePlaceholder(),
             newerVersions);
 
     private static VersionJiraRow CreateVersion(string version, string jiraTask, string jiraStatus) =>

@@ -20,7 +20,7 @@ public class ComponentCheckRowTests
             new RepositoryName("repo"),
             new VersionLabel("1.0.0"),
             CheckStatus.UpToDate,
-            new RowDetails("-"),
+            RowDetails.CreatePlaceholder(),
             null!);
 
         // Assert
@@ -42,7 +42,7 @@ public class ComponentCheckRowTests
             new RepositoryName("repo"),
             new VersionLabel("1.0.0"),
             invalidStatus,
-            new RowDetails("-"),
+            RowDetails.CreatePlaceholder(),
             []);
 
         // Assert
@@ -158,7 +158,7 @@ public class ComponentCheckRowTests
             new RepositoryName("repo"),
             new VersionLabel("1.0.0"),
             CheckStatus.Outdated,
-            new RowDetails("-"),
+            RowDetails.CreatePlaceholder(),
             newerVersions);
 
     private static VersionJiraRow Version(string version, string task, string status) =>

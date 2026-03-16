@@ -228,7 +228,7 @@ public class MiniExcelReportRendererTests
             new RepositoryName("repo-api"),
             new VersionLabel("1.0.0"),
             CheckStatus.Outdated,
-            new RowDetails("-"),
+            RowDetails.CreatePlaceholder(),
             []);
 
     private static string CreateTempDirectoryPath() =>

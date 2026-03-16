@@ -33,4 +33,16 @@ public class RowDetailsTests
         value.Should().Be("up to date");
         text.Should().Be("up to date");
     }
+
+    [Fact(DisplayName = "RowDetails factory creates the placeholder value.")]
+    [Trait("Category", "Unit")]
+    public void CreatePlaceholderCreatesPlaceholderValue()
+    {
+        // Arrange
+        // Act
+        var details = RowDetails.CreatePlaceholder();
+
+        // Assert
+        details.Value.Should().Be("-");
+    }
 }

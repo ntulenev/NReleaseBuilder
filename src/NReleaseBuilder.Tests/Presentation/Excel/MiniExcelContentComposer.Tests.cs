@@ -157,7 +157,7 @@ public class MiniExcelContentComposerTests
             new RepositoryName("repo-api"),
             new VersionLabel("1.0.0"),
             CheckStatus.Outdated,
-            new RowDetails("-"),
+            RowDetails.CreatePlaceholder(),
             [version]);
     }
 }

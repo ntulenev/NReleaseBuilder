@@ -109,7 +109,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     resolvedRepositoryName,
                     displayCurrentVersion,
                     CheckStatus.UpToDate,
-                    new RowDetails("-"),
+                    RowDetails.CreatePlaceholder(),
                     []));
                 continue;
             }
@@ -120,7 +120,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 resolvedRepositoryName,
                 displayCurrentVersion,
                 CheckStatus.Outdated,
-                new RowDetails("-"),
+                RowDetails.CreatePlaceholder(),
                 newerVersions));
         }
 

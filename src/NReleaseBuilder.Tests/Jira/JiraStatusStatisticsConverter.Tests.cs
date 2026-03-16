@@ -79,7 +79,7 @@ public class JiraStatusStatisticsConverterTests
             new RepositoryName($"repo-{index}"),
             new VersionLabel("1.0.0"),
             CheckStatus.Outdated,
-            new RowDetails("-"),
+            RowDetails.CreatePlaceholder(),
             newerVersions);
 
     private static VersionJiraRow CreateVersionRow(string version, string status) =>
