@@ -122,7 +122,7 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
         CancellationToken cancellationToken)
     {
         var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
-        Uri? next = new Uri(
+        var next = new Uri(
             $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash.Value)}/pullrequests?pagelen={_bitbucketOptions.PageLen}",
             UriKind.Relative);
         Uri? fallbackPullRequestUrl = null;

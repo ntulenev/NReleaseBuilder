@@ -59,6 +59,10 @@ builder.Services.AddHttpClient(HttpClientNames.JIRA, (sp, http) =>
 });
 
 builder.Services.AddTransient<ICsvComponentReader, CsvComponentReader>();
+builder.Services.AddTransient<ICsvComponentNameFilterBuilder, CsvComponentNameFilterBuilder>();
+builder.Services.AddTransient<ICsvComponentRowSourceReader, CsvComponentRowSourceReader>();
+builder.Services.AddTransient<ICsvComponentRowsMerger, CsvComponentRowsMerger>();
+builder.Services.AddTransient<ICsvImageParser, CsvImageParser>();
 builder.Services.AddTransient<IHttpRetryExecutor, HttpRetryExecutor>();
 builder.Services.AddTransient<IResponseSerializer, ResponseSerializer>();
 builder.Services.AddTransient<IBitbucketIntegrationCore, BitbucketIntegrationCore>();

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 
 using Moq;
 
+using NReleaseBuilder.Abstractions.Csv;
 using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Csv;
@@ -29,13 +30,27 @@ public class CsvComponentReaderTests
             .Returns(settings);
 
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
+        var componentNameFilterBuildCount = 0;
+        var componentNameFilterBuilderMock = new Mock<ICsvComponentNameFilterBuilder>(MockBehavior.Strict);
+        componentNameFilterBuilderMock
+            .Setup(x => x.Build(settings.CsvComponentNamesFilter))
+            .Callback(() => componentNameFilterBuildCount++)
+            .Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        var rowSourceReader = new Mock<ICsvComponentRowSourceReader>(MockBehavior.Strict).Object;
+        var rowsMerger = new Mock<ICsvComponentRowsMerger>(MockBehavior.Strict).Object;
 
         // Act
-        var exception = Record.Exception(() => new CsvComponentReader(optionsMock.Object, renderer));
+        var exception = Record.Exception(() => new CsvComponentReader(
+            optionsMock.Object,
+            renderer,
+            componentNameFilterBuilderMock.Object,
+            rowSourceReader,
+            rowsMerger));
 
         // Assert
         exception.Should().BeNull();
         optionsValueReadCount.Should().Be(1);
+        componentNameFilterBuildCount.Should().Be(1);
     }
 
     [Fact(DisplayName = "CsvComponentReader cant be created with null options.")]
@@ -44,9 +59,17 @@ public class CsvComponentReaderTests
     {
         // Arrange
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
+        var componentNameFilterBuilder = new Mock<ICsvComponentNameFilterBuilder>(MockBehavior.Strict).Object;
+        var rowSourceReader = new Mock<ICsvComponentRowSourceReader>(MockBehavior.Strict).Object;
+        var rowsMerger = new Mock<ICsvComponentRowsMerger>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new CsvComponentReader(null!, renderer);
+        Action action = () => _ = new CsvComponentReader(
+            null!,
+            renderer,
+            componentNameFilterBuilder,
+            rowSourceReader,
+            rowsMerger);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
@@ -61,13 +84,96 @@ public class CsvComponentReaderTests
         var settings = CreateSettings("components.csv");
         var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
         optionsMock.Setup(x => x.Value).Returns(settings);
+        var componentNameFilterBuilder = new Mock<ICsvComponentNameFilterBuilder>(MockBehavior.Strict).Object;
+        var rowSourceReader = new Mock<ICsvComponentRowSourceReader>(MockBehavior.Strict).Object;
+        var rowsMerger = new Mock<ICsvComponentRowsMerger>(MockBehavior.Strict).Object;
 
         // Act
-        Action action = () => _ = new CsvComponentReader(optionsMock.Object, null!);
+        Action action = () => _ = new CsvComponentReader(
+            optionsMock.Object,
+            null!,
+            componentNameFilterBuilder,
+            rowSourceReader,
+            rowsMerger);
 
         // Assert
         action.Should().Throw<ArgumentNullException>()
             .WithParameterName("renderer");
+    }
+
+    [Fact(DisplayName = "CsvComponentReader cant be created with null component name filter builder.")]
+    [Trait("Category", "Unit")]
+    public void CsvComponentReaderCantBeCreatedWithNullComponentNameFilterBuilder()
+    {
+        // Arrange
+        var settings = CreateSettings("components.csv");
+        var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
+        optionsMock.Setup(x => x.Value).Returns(settings);
+        var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
+        var rowSourceReader = new Mock<ICsvComponentRowSourceReader>(MockBehavior.Strict).Object;
+        var rowsMerger = new Mock<ICsvComponentRowsMerger>(MockBehavior.Strict).Object;
+
+        // Act
+        Action action = () => _ = new CsvComponentReader(
+            optionsMock.Object,
+            renderer,
+            null!,
+            rowSourceReader,
+            rowsMerger);
+
+        // Assert
+        action.Should().Throw<ArgumentNullException>()
+            .WithParameterName("componentNameFilterBuilder");
+    }
+
+    [Fact(DisplayName = "CsvComponentReader cant be created with null row source reader.")]
+    [Trait("Category", "Unit")]
+    public void CsvComponentReaderCantBeCreatedWithNullRowSourceReader()
+    {
+        // Arrange
+        var settings = CreateSettings("components.csv");
+        var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
+        optionsMock.Setup(x => x.Value).Returns(settings);
+        var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
+        var componentNameFilterBuilder = new Mock<ICsvComponentNameFilterBuilder>(MockBehavior.Strict).Object;
+        var rowsMerger = new Mock<ICsvComponentRowsMerger>(MockBehavior.Strict).Object;
+
+        // Act
+        Action action = () => _ = new CsvComponentReader(
+            optionsMock.Object,
+            renderer,
+            componentNameFilterBuilder,
+            null!,
+            rowsMerger);
+
+        // Assert
+        action.Should().Throw<ArgumentNullException>()
+            .WithParameterName("rowSourceReader");
+    }
+
+    [Fact(DisplayName = "CsvComponentReader cant be created with null rows merger.")]
+    [Trait("Category", "Unit")]
+    public void CsvComponentReaderCantBeCreatedWithNullRowsMerger()
+    {
+        // Arrange
+        var settings = CreateSettings("components.csv");
+        var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
+        optionsMock.Setup(x => x.Value).Returns(settings);
+        var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
+        var componentNameFilterBuilder = new Mock<ICsvComponentNameFilterBuilder>(MockBehavior.Strict).Object;
+        var rowSourceReader = new Mock<ICsvComponentRowSourceReader>(MockBehavior.Strict).Object;
+
+        // Act
+        Action action = () => _ = new CsvComponentReader(
+            optionsMock.Object,
+            renderer,
+            componentNameFilterBuilder,
+            rowSourceReader,
+            null!);
+
+        // Assert
+        action.Should().Throw<ArgumentNullException>()
+            .WithParameterName("rowsMerger");
     }
 
     [Fact(DisplayName = "CsvComponentReader Read returns parsed distinct rows sorted by component.")]
@@ -89,7 +195,7 @@ public class CsvComponentReaderTests
         optionsMock.Setup(x => x.Value).Returns(settings);
 
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
-        var sut = new CsvComponentReader(optionsMock.Object, renderer);
+        var sut = CreateSut(optionsMock.Object, renderer);
 
         // Act
         var rows = sut.Read();
@@ -117,7 +223,7 @@ public class CsvComponentReaderTests
         optionsMock.Setup(x => x.Value).Returns(settings);
 
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
-        var sut = new CsvComponentReader(optionsMock.Object, renderer);
+        var sut = CreateSut(optionsMock.Object, renderer);
 
         // Act
         var rows = sut.Read();
@@ -151,7 +257,7 @@ public class CsvComponentReaderTests
         optionsMock.Setup(x => x.Value).Returns(settings);
 
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
-        var sut = new CsvComponentReader(optionsMock.Object, renderer);
+        var sut = CreateSut(optionsMock.Object, renderer);
 
         // Act
         var rows = sut.Read();
@@ -187,7 +293,7 @@ public class CsvComponentReaderTests
         optionsMock.Setup(x => x.Value).Returns(settings);
 
         var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
-        var sut = new CsvComponentReader(optionsMock.Object, renderer);
+        var sut = CreateSut(optionsMock.Object, renderer);
 
         // Act
         var snapshot = sut.ReadSourceSnapshot();
@@ -220,7 +326,7 @@ public class CsvComponentReaderTests
                 message.Value == "Failed to parse CSV: CSV file is empty.")))
             .Callback<ErrorMessage>(message => printErrorCount++);
 
-        var sut = new CsvComponentReader(optionsMock.Object, rendererMock.Object);
+        var sut = CreateSut(optionsMock.Object, rendererMock.Object);
 
         // Act
         var rows = sut.Read();
@@ -250,7 +356,7 @@ public class CsvComponentReaderTests
                 message.Value == "Failed to parse CSV: CSV must contain 'container' and 'image' columns.")))
             .Callback<ErrorMessage>(message => printErrorCount++);
 
-        var sut = new CsvComponentReader(optionsMock.Object, rendererMock.Object);
+        var sut = CreateSut(optionsMock.Object, rendererMock.Object);
 
         // Act
         var rows = sut.Read();
@@ -279,7 +385,7 @@ public class CsvComponentReaderTests
                 && message.Value.Contains(Path.GetFileName(missingFilePath), StringComparison.OrdinalIgnoreCase))))
             .Callback<ErrorMessage>(message => printErrorCount++);
 
-        var sut = new CsvComponentReader(optionsMock.Object, rendererMock.Object);
+        var sut = CreateSut(optionsMock.Object, rendererMock.Object);
 
         // Act
         var rows = sut.Read();
@@ -319,6 +425,16 @@ public class CsvComponentReaderTests
                 OutputPath = "report.pdf",
             },
         };
+
+    private static CsvComponentReader CreateSut(
+        IOptions<AppSettings> options,
+        IRenderer renderer) =>
+        new(
+            options,
+            renderer,
+            new CsvComponentNameFilterBuilder(),
+            new CsvComponentRowSourceReader(new CsvImageParser()),
+            new CsvComponentRowsMerger());
 
     private static TempCsvFile CreateTempCsvFile(string content)
     {

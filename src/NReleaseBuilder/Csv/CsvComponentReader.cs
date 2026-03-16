@@ -5,7 +5,6 @@ using NReleaseBuilder.Abstractions.Csv;
 using NReleaseBuilder.Abstractions.Rendering;
 using NReleaseBuilder.Configuration;
 using NReleaseBuilder.Models;
-using NReleaseBuilder.Models.Bitbucket;
 using NReleaseBuilder.Models.Components;
 
 namespace NReleaseBuilder.Csv;
@@ -15,28 +14,35 @@ namespace NReleaseBuilder.Csv;
 /// </summary>
 public sealed class CsvComponentReader : ICsvComponentReader
 {
-    private readonly record struct CsvImageRow(
-        ComponentName Component,
-        RepositoryName Repository,
-        VersionLabel Version);
-
     /// <summary>
     /// Initializes a new instance of the <see cref="CsvComponentReader"/> class.
     /// </summary>
     /// <param name="options">Application settings options.</param>
     /// <param name="renderer">Application renderer.</param>
+    /// <param name="componentNameFilterBuilder">Component-name filter builder.</param>
+    /// <param name="rowSourceReader">CSV row source reader.</param>
+    /// <param name="rowsMerger">Target/dev rows merger.</param>
     public CsvComponentReader(
         IOptions<AppSettings> options,
-        IRenderer renderer)
+        IRenderer renderer,
+        ICsvComponentNameFilterBuilder componentNameFilterBuilder,
+        ICsvComponentRowSourceReader rowSourceReader,
+        ICsvComponentRowsMerger rowsMerger)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(renderer);
+        ArgumentNullException.ThrowIfNull(componentNameFilterBuilder);
+        ArgumentNullException.ThrowIfNull(rowSourceReader);
+        ArgumentNullException.ThrowIfNull(rowsMerger);
 
         var settings = options.Value;
 
         _targetCsvFilePath = settings.TargetCsvFilePath.Trim();
         _devCsvFilePath = settings.DevCsvFilePath.Trim();
-        _defaultComponentNamesFilter = BuildComponentNamesFilter(settings.CsvComponentNamesFilter);
+        _defaultComponentNamesFilter = componentNameFilterBuilder.Build(settings.CsvComponentNamesFilter);
+        _componentNameFilterBuilder = componentNameFilterBuilder;
+        _rowSourceReader = rowSourceReader;
+        _rowsMerger = rowsMerger;
         _renderer = renderer;
     }
 
@@ -47,11 +53,11 @@ public sealed class CsvComponentReader : ICsvComponentReader
         {
             var effectiveFilter = componentNamesFilter is null
                 ? _defaultComponentNamesFilter
-                : BuildComponentNamesFilter(componentNamesFilter);
+                : _componentNameFilterBuilder.Build(componentNamesFilter);
 
-            var targetRowsByComponent = ReadRowsFromCsv(_targetCsvFilePath, effectiveFilter);
+            var targetRowsByComponent = _rowSourceReader.ReadRows(_targetCsvFilePath, effectiveFilter);
             var devRowsByComponent = ReadDevRows(effectiveFilter);
-            var rows = MergeRows(targetRowsByComponent, devRowsByComponent);
+            var rows = _rowsMerger.Merge(targetRowsByComponent, devRowsByComponent);
 
             return
             [
@@ -90,9 +96,9 @@ public sealed class CsvComponentReader : ICsvComponentReader
     {
         try
         {
-            var noFilter = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var devRowsByComponent = ReadRowsFromCsv(_devCsvFilePath, noFilter);
-            var targetRowsByComponent = ReadRowsFromCsv(_targetCsvFilePath, noFilter);
+            var noFilter = _componentNameFilterBuilder.Build(null);
+            var devRowsByComponent = _rowSourceReader.ReadRows(_devCsvFilePath, noFilter);
+            var targetRowsByComponent = _rowSourceReader.ReadRows(_targetCsvFilePath, noFilter);
 
             return new ComponentSourceSnapshot(
                 [.. devRowsByComponent.Values
@@ -129,157 +135,14 @@ public sealed class CsvComponentReader : ICsvComponentReader
         }
     }
 
-    private Dictionary<string, CsvImageRow> ReadDevRows(HashSet<string> effectiveFilter)
+    private IReadOnlyDictionary<string, ComponentRow> ReadDevRows(IReadOnlySet<string> effectiveFilter)
     {
         if (string.Equals(_devCsvFilePath, _targetCsvFilePath, StringComparison.OrdinalIgnoreCase))
         {
-            return new Dictionary<string, CsvImageRow>(StringComparer.OrdinalIgnoreCase);
+            return new Dictionary<string, ComponentRow>(StringComparer.OrdinalIgnoreCase);
         }
 
-        return ReadRowsFromCsv(_devCsvFilePath, effectiveFilter);
-    }
-
-    private static List<ComponentRow> MergeRows(
-        IReadOnlyDictionary<string, CsvImageRow> targetRowsByComponent,
-        IReadOnlyDictionary<string, CsvImageRow> devRowsByComponent)
-    {
-        var rows = new List<ComponentRow>(targetRowsByComponent.Count + devRowsByComponent.Count);
-
-        foreach (var targetRow in targetRowsByComponent.Values)
-        {
-            rows.Add(new ComponentRow(
-                targetRow.Component,
-                targetRow.Repository,
-                targetRow.Version));
-        }
-
-        foreach (var (componentName, devRow) in devRowsByComponent)
-        {
-            if (targetRowsByComponent.ContainsKey(componentName))
-            {
-                continue;
-            }
-
-            rows.Add(new ComponentRow(
-                devRow.Component,
-                devRow.Repository,
-                devRow.Version,
-                isReleased: false));
-        }
-
-        return rows;
-    }
-
-    private static Dictionary<string, CsvImageRow> ReadRowsFromCsv(string csvFilePath, HashSet<string> effectiveFilter)
-    {
-        var rows = new Dictionary<string, CsvImageRow>(StringComparer.OrdinalIgnoreCase);
-
-        using var parser = new TextFieldParser(csvFilePath);
-        parser.TextFieldType = FieldType.Delimited;
-        parser.SetDelimiters(",");
-        parser.HasFieldsEnclosedInQuotes = true;
-
-        var headers = parser.ReadFields();
-        if (headers is null)
-        {
-            throw new InvalidOperationException("CSV file is empty.");
-        }
-
-        var containerIndex = FindHeaderIndex(headers, "container");
-        var imageIndex = FindHeaderIndex(headers, "image");
-
-        if (containerIndex < 0 || imageIndex < 0)
-        {
-            throw new InvalidOperationException("CSV must contain 'container' and 'image' columns.");
-        }
-
-        while (!parser.EndOfData)
-        {
-            var fields = parser.ReadFields();
-            if (fields is null || fields.Length <= Math.Max(containerIndex, imageIndex))
-            {
-                continue;
-            }
-
-            var component = fields[containerIndex]?.Trim();
-            var image = fields[imageIndex]?.Trim();
-
-            if (string.IsNullOrWhiteSpace(component) || string.IsNullOrWhiteSpace(image))
-            {
-                continue;
-            }
-
-            if (!IsComponentIncluded(component, effectiveFilter))
-            {
-                continue;
-            }
-
-            var (repository, version) = ParseImage(image);
-            if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(version))
-            {
-                continue;
-            }
-
-            rows[component] = new CsvImageRow(
-                new ComponentName(component),
-                new RepositoryName(repository),
-                new VersionLabel(version));
-        }
-
-        return rows;
-    }
-
-    private static int FindHeaderIndex(string[] headers, string headerName)
-    {
-        for (var i = 0; i < headers.Length; i++)
-        {
-            if (string.Equals(headers[i], headerName, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private static (string Repository, string Version) ParseImage(string image)
-    {
-        var imageWithoutDigest = image.Split('@', 2)[0];
-        var lastSlashIndex = imageWithoutDigest.LastIndexOf('/');
-        var tagSeparatorIndex = imageWithoutDigest.LastIndexOf(':');
-
-        if (tagSeparatorIndex > lastSlashIndex)
-        {
-            var repository = imageWithoutDigest.Substring(lastSlashIndex + 1, tagSeparatorIndex - lastSlashIndex - 1);
-            var version = imageWithoutDigest[(tagSeparatorIndex + 1)..];
-            return (repository, version);
-        }
-
-        return (imageWithoutDigest[(lastSlashIndex + 1)..], string.Empty);
-    }
-
-    private static bool IsComponentIncluded(string component, HashSet<string> componentNamesFilter)
-        => componentNamesFilter.Count == 0 || componentNamesFilter.Contains(component);
-
-    private static HashSet<string> BuildComponentNamesFilter(IReadOnlyList<string>? componentNamesFilter)
-    {
-        if (componentNamesFilter is null || componentNamesFilter.Count == 0)
-        {
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var componentName in componentNamesFilter)
-        {
-            if (string.IsNullOrWhiteSpace(componentName))
-            {
-                continue;
-            }
-
-            _ = result.Add(componentName.Trim());
-        }
-
-        return result;
+        return _rowSourceReader.ReadRows(_devCsvFilePath, effectiveFilter);
     }
 
     private void PrintCsvParsingError(Exception exception)
@@ -290,6 +153,9 @@ public sealed class CsvComponentReader : ICsvComponentReader
 
     private readonly string _targetCsvFilePath;
     private readonly string _devCsvFilePath;
-    private readonly HashSet<string> _defaultComponentNamesFilter;
+    private readonly IReadOnlySet<string> _defaultComponentNamesFilter;
+    private readonly ICsvComponentNameFilterBuilder _componentNameFilterBuilder;
+    private readonly ICsvComponentRowSourceReader _rowSourceReader;
+    private readonly ICsvComponentRowsMerger _rowsMerger;
     private readonly IRenderer _renderer;
 }
