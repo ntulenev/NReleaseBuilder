@@ -93,6 +93,61 @@ public class AppSettingsTests
         reportRuns[0].ExcelOutputPathOverride.Should().Be("backoffice.xlsx");
     }
 
+    [Fact(DisplayName = "BuildConfiguredComponentNames returns trimmed distinct filter values when no groups configured.")]
+    [Trait("Category", "Unit")]
+    public void BuildConfiguredComponentNamesReturnsTrimmedDistinctFilterValuesWhenNoGroupsConfigured()
+    {
+        // Arrange
+        var settings = new AppSettings
+        {
+            DevCsvFilePath = "dev-components.csv",
+            TargetCsvFilePath = "target-components.csv",
+            CsvComponentNamesFilter = [" service-a ", "SERVICE-A", "service-b"],
+            Bitbucket = CreateBitbucketOptions(),
+            Jira = CreateJiraOptions(),
+        };
+
+        // Act
+        var configuredComponentNames = settings.BuildConfiguredComponentNames();
+
+        // Assert
+        configuredComponentNames.Should().Equal("service-a", "service-b");
+    }
+
+    [Fact(DisplayName = "BuildConfiguredComponentNames prefers grouped component names over global filter.")]
+    [Trait("Category", "Unit")]
+    public void BuildConfiguredComponentNamesPrefersGroupedComponentNamesOverGlobalFilter()
+    {
+        // Arrange
+        var settings = new AppSettings
+        {
+            DevCsvFilePath = "dev-components.csv",
+            TargetCsvFilePath = "target-components.csv",
+            CsvComponentNamesFilter = ["ignored-component"],
+            CsvComponentGroups =
+            [
+                new CsvComponentGroupOptions
+                {
+                    Name = "Backoffice",
+                    ComponentNames = [" service-a ", "service-b", "SERVICE-A"],
+                },
+                new CsvComponentGroupOptions
+                {
+                    Name = "Frontend",
+                    ComponentNames = ["service-c"],
+                },
+            ],
+            Bitbucket = CreateBitbucketOptions(),
+            Jira = CreateJiraOptions(),
+        };
+
+        // Act
+        var configuredComponentNames = settings.BuildConfiguredComponentNames();
+
+        // Assert
+        configuredComponentNames.Should().Equal("service-a", "service-b", "service-c");
+    }
+
     private static BitbucketOptions CreateBitbucketOptions() =>
         new()
         {

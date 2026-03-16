@@ -80,4 +80,40 @@ public sealed class AppSettings
                     group.ExcelOutputPath)),
         ];
     }
+
+    /// <summary>
+    /// Builds the distinct configured component names from either groups or the global filter.
+    /// </summary>
+    /// <returns>Configured component names.</returns>
+    public HashSet<string> BuildConfiguredComponentNames()
+    {
+        var configuredComponents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (CsvComponentGroups.Count > 0)
+        {
+            foreach (var componentName in CsvComponentGroups.SelectMany(static x => x.ComponentNames))
+            {
+                AddConfiguredComponentName(configuredComponents, componentName);
+            }
+
+            return configuredComponents;
+        }
+
+        foreach (var componentName in CsvComponentNamesFilter)
+        {
+            AddConfiguredComponentName(configuredComponents, componentName);
+        }
+
+        return configuredComponents;
+    }
+
+    private static void AddConfiguredComponentName(HashSet<string> configuredComponents, string? componentName)
+    {
+        if (string.IsNullOrWhiteSpace(componentName))
+        {
+            return;
+        }
+
+        _ = configuredComponents.Add(componentName.Trim());
+    }
 }
