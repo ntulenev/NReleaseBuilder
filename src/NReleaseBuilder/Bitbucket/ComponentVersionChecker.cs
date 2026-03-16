@@ -11,8 +11,6 @@ namespace NReleaseBuilder.Bitbucket;
 /// </summary>
 public sealed class ComponentVersionChecker : IComponentVersionChecker
 {
-    internal static readonly VersionLabel _notReleasedYetVersion = new("Not released yet");
-
     /// <inheritdoc />
     public IReadOnlyList<ComponentCheckRow> BuildRows(
         IReadOnlyList<ComponentRow> componentRows,
@@ -43,7 +41,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             }
 
             var resolvedRepositoryName = lookup.ResolvedRepository;
-            var displayCurrentVersion = row.IsReleased ? row.Version : _notReleasedYetVersion;
+            var displayCurrentVersion = row.IsReleased ? row.Version : VersionLabel.CreateNotReleasedYet();
 
             if (lookup.IsRepositoryMissing)
             {

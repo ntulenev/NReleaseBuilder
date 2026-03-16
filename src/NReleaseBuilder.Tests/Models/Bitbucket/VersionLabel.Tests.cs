@@ -33,4 +33,16 @@ public class VersionLabelTests
         value.Should().Be("v1.2.3");
         text.Should().Be("v1.2.3");
     }
+
+    [Fact(DisplayName = "VersionLabel factory creates the not released yet sentinel label.")]
+    [Trait("Category", "Unit")]
+    public void CreateNotReleasedYetCreatesSentinelLabel()
+    {
+        // Arrange
+        // Act
+        var label = VersionLabel.CreateNotReleasedYet();
+
+        // Assert
+        label.Value.Should().Be("Not released yet");
+    }
 }
