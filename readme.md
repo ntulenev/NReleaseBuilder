@@ -1,6 +1,6 @@
 # NReleaseBuilder
 
-NReleaseBuilder is a .NET console application that checks deployed component versions from a CSV file against Bitbucket tags, then enriches newer versions with Jira task and status information.
+NReleaseBuilder is a .NET console application that compares component versions from two CSV snapshots (`DevCsvFilePath` and `TargetCsvFilePath`), checks target versions against Bitbucket tags, and enriches newer versions with Jira task and status information.
 
 ## Project Structure
 
@@ -36,23 +36,20 @@ NReleaseBuilder/
 
 ## What It Does
 
-1. Reads a CSV file (expects `container` and `image` columns).
-2. Extracts repository and current version from each image tag.
-3. Loads tags from Bitbucket for each repository.
-4. Detects versions newer than the current one.
-5. Extracts Jira task keys from related commit messages.
-6. Resolves Jira statuses for those tasks.
-7. Generates reports:
-   - console report with:
-     - per-component status table
-     - summary counters
-     - unique Jira tasks by status chart
-   - Excel report (when `Excel.Enabled` is `true`) with:
-     - `Summary` sheet for `Results` and `Unique Jira Tasks By Status`
-     - one sheet per component
-     - `Breaking Changes` and `Required Actions` sections
-     - hyperlinks and status/alert colors aligned with the PDF output
-   - PDF report (when `Pdf.Enabled` is `true`) with filtered results and details
+1. Reads a target CSV and a development CSV. Both must contain `container` and `image` columns.
+2. Extracts component name, repository name, and version tag from each image reference.
+3. Builds the report input by:
+   - taking target rows as released components
+   - adding components found only in the development CSV as unreleased rows
+4. Loads tags from Bitbucket for each repository.
+5. Detects versions newer than the current target version.
+6. Extracts Jira task keys from related commit messages.
+7. Resolves Jira statuses and optional release-alert fields for those tasks.
+8. Generates reports:
+   - console report with per-component status, summaries, and unique Jira-task statistics
+   - Excel report when `Excel.Enabled` is `true`
+   - PDF report when `Pdf.Enabled` is `true`
+9. Prints a source-difference summary for components that exist in only one CSV or only in configuration.
 
 ## Recommended Development Flow
 
@@ -72,13 +69,14 @@ Typical fit:
 
 ## Configuration
 
-Edit `src/NReleaseBuilder/appsettings.json`.
+Edit [src/NReleaseBuilder/appsettings.json].
 
 Recommended example:
 
 ```json
 {
-  "CsvFilePath": "C:\\path\\to\\components.csv",
+  "DevCsvFilePath": "C:\\path\\to\\components-dev.csv",
+  "TargetCsvFilePath": "C:\\path\\to\\components-target.csv",
   "CsvComponentNamesFilter": [],
   "CsvComponentGroups": [
     {
@@ -131,7 +129,8 @@ Recommended example:
 
 | Key | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `CsvFilePath` | Yes | - | Path to source CSV file. File must exist. |
+| `DevCsvFilePath` | Yes | - | Path to the development CSV file. File must exist. |
+| `TargetCsvFilePath` | Yes | - | Path to the target CSV file. File must exist. |
 | `CsvComponentNamesFilter` | No | `[]` | Optional allow-list of component names (case-insensitive). |
 | `CsvComponentGroups` | No | `[]` | Optional grouped filters. When non-empty, one report run is generated per group. |
 | `Bitbucket` | Yes | - | Bitbucket API settings. |
@@ -143,7 +142,7 @@ Recommended example:
 
 | Key | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `Name` | Yes | `""` | Group display name shown in runtime logs and PDF header. Must be unique. |
+| `Name` | Yes | `""` | Group display name shown in runtime logs and report headers. Must be unique. |
 | `ComponentNames` | Yes | `[]` | Group-specific component allow-list. Must contain at least one non-empty value. |
 | `PdfOutputPath` | Required when `Pdf.Enabled=true` | `null` | Output path for this group's PDF report. Date suffix is appended automatically. |
 | `ExcelOutputPath` | Required when `Excel.Enabled=true` | `null` | Output path for this group's Excel report. Date suffix is appended automatically. |
@@ -247,6 +246,14 @@ sample-worker,registry.invalid/moonlight.task.runner:2.4.0
 ```
 
 Only `container` and `image` are required.
+
+Parsing notes:
+
+- The component name is taken from `container`.
+- The repository name is taken from the image name after the last `/`.
+- The version is taken from the image tag after the last `:`.
+- Image digests such as `@sha256:...` are ignored.
+- Rows without a valid image tag version are skipped.
 
 ## Output
 
