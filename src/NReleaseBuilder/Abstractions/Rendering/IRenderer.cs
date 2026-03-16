@@ -114,6 +114,12 @@ public interface IRenderer
     void RenderSummary(IReadOnlyList<ComponentCheckRow> rows);
 
     /// <summary>
+    /// Prints a final comparison table for component presence across dev CSV, target CSV, and settings.
+    /// </summary>
+    /// <param name="rows">Difference rows to print.</param>
+    void PrintComponentSourceDifferences(IReadOnlyList<ComponentSourceDifferenceRow> rows);
+
+    /// <summary>
     /// Prints an error message.
     /// </summary>
     /// <param name="message">Error details.</param>

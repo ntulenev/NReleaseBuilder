@@ -49,6 +49,7 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
     {
         _renderer.RenderHeader();
         await RunReportRunsAsync(_settings.BuildReportRuns(), cancellationToken).ConfigureAwait(false);
+        RenderComponentSourceDifferences();
         return 0;
     }
 
@@ -120,6 +121,102 @@ public sealed class VersionCheckApplication : IVersionCheckApplication
 
     private IReadOnlyList<ComponentRow>? TryReadComponentRows(IReadOnlyList<string>? componentNamesFilter)
         => _csvReader.Read(componentNamesFilter);
+
+    private void RenderComponentSourceDifferences()
+    {
+        var sourceSnapshot = _csvReader.ReadSourceSnapshot();
+        if (sourceSnapshot is null)
+        {
+            return;
+        }
+
+        var differenceRows = BuildComponentSourceDifferenceRows(sourceSnapshot, _settings);
+        if (differenceRows.Count == 0)
+        {
+            return;
+        }
+
+        _renderer.PrintComponentSourceDifferences(differenceRows);
+    }
+
+    private static List<ComponentSourceDifferenceRow> BuildComponentSourceDifferenceRows(
+        ComponentSourceSnapshot sourceSnapshot,
+        AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(sourceSnapshot);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var devComponents = sourceSnapshot.DevComponents
+            .Select(static x => x.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targetComponents = sourceSnapshot.TargetComponents
+            .Select(static x => x.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var configuredComponents = BuildConfiguredComponentNames(settings);
+
+        var allComponents = devComponents
+            .Concat(targetComponents)
+            .Concat(configuredComponents)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var rows = new List<ComponentSourceDifferenceRow>(allComponents.Length);
+
+        foreach (var componentName in allComponents)
+        {
+            var isInDev = devComponents.Contains(componentName);
+            var isInTarget = targetComponents.Contains(componentName);
+            var isInSettings = configuredComponents.Contains(componentName);
+
+            if (isInDev == isInTarget && isInTarget == isInSettings)
+            {
+                continue;
+            }
+
+            rows.Add(new ComponentSourceDifferenceRow(
+                new ComponentName(componentName),
+                isInDev,
+                isInTarget,
+                isInSettings));
+        }
+
+        return rows;
+    }
+
+    private static HashSet<string> BuildConfiguredComponentNames(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var configuredComponents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (settings.CsvComponentGroups.Count > 0)
+        {
+            foreach (var componentName in settings.CsvComponentGroups.SelectMany(static x => x.ComponentNames))
+            {
+                AddConfiguredComponentName(configuredComponents, componentName);
+            }
+
+            return configuredComponents;
+        }
+
+        foreach (var componentName in settings.CsvComponentNamesFilter)
+        {
+            AddConfiguredComponentName(configuredComponents, componentName);
+        }
+
+        return configuredComponents;
+    }
+
+    private static void AddConfiguredComponentName(HashSet<string> configuredComponents, string? componentName)
+    {
+        if (string.IsNullOrWhiteSpace(componentName))
+        {
+            return;
+        }
+
+        _ = configuredComponents.Add(componentName.Trim());
+    }
 
     private bool TryHandleNoComponentRows(List<ComponentRow> componentRows, string? runName)
     {

@@ -17,4 +17,10 @@ public interface ICsvComponentReader
     /// </param>
     /// <returns>Distinct component rows; <see langword="null"/> when reading fails.</returns>
     IReadOnlyList<ComponentRow>? Read(IReadOnlyList<string>? componentNamesFilter = null);
+
+    /// <summary>
+    /// Reads unfiltered component presence from development and target CSV inputs.
+    /// </summary>
+    /// <returns>Source snapshot; <see langword="null"/> when reading fails.</returns>
+    ComponentSourceSnapshot? ReadSourceSnapshot();
 }

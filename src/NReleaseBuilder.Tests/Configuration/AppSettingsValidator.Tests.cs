@@ -46,7 +46,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = " ",
+            TargetCsvFilePath = " ",
+            DevCsvFilePath = " ",
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -58,7 +59,8 @@ public class AppSettingsValidatorTests
 
         // Assert
         result.Failed.Should().BeTrue();
-        result.Failures.Should().Contain("CsvFilePath is missing in appsettings.json.");
+        result.Failures.Should().Contain("TargetCsvFilePath is missing in appsettings.json.");
+        result.Failures.Should().Contain("DevCsvFilePath is missing in appsettings.json.");
     }
 
     [Fact(DisplayName = "AppSettingsValidator Validate fails when csv file does not exist.")]
@@ -74,7 +76,57 @@ public class AppSettingsValidatorTests
 
         // Assert
         result.Failed.Should().BeTrue();
-        result.Failures.Should().Contain(x => x.StartsWith("CSV file not found:", StringComparison.Ordinal));
+        result.Failures.Should().Contain(x => x.StartsWith("Target CSV file not found:", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "AppSettingsValidator Validate succeeds when target and dev csv paths are configured.")]
+    [Trait("Category", "Unit")]
+    public void ValidateSucceedsWhenTargetAndDevCsvPathsAreConfigured()
+    {
+        // Arrange
+        using var targetCsvFile = CreateTempCsvFile();
+        using var devCsvFile = CreateTempCsvFile();
+        var sut = new AppSettingsValidator();
+        var settings = new AppSettings
+        {
+            TargetCsvFilePath = targetCsvFile.Path,
+            DevCsvFilePath = devCsvFile.Path,
+            CsvComponentNamesFilter = ["api"],
+            Bitbucket = CreateValidBitbucketOptions(),
+            Jira = CreateValidJiraOptions(),
+            Pdf = CreateValidPdfOptions(),
+        };
+
+        // Act
+        var result = sut.Validate(null, settings);
+
+        // Assert
+        result.Succeeded.Should().BeTrue();
+    }
+
+    [Fact(DisplayName = "AppSettingsValidator Validate fails when dev csv file does not exist.")]
+    [Trait("Category", "Unit")]
+    public void ValidateFailsWhenDevCsvFileDoesNotExist()
+    {
+        // Arrange
+        using var targetCsvFile = CreateTempCsvFile();
+        var sut = new AppSettingsValidator();
+        var settings = new AppSettings
+        {
+            TargetCsvFilePath = targetCsvFile.Path,
+            DevCsvFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.csv"),
+            CsvComponentNamesFilter = ["api"],
+            Bitbucket = CreateValidBitbucketOptions(),
+            Jira = CreateValidJiraOptions(),
+            Pdf = CreateValidPdfOptions(),
+        };
+
+        // Act
+        var result = sut.Validate(null, settings);
+
+        // Assert
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(x => x.StartsWith("Dev CSV file not found:", StringComparison.Ordinal));
     }
 
     [Fact(DisplayName = "AppSettingsValidator Validate fails for invalid component name filter values.")]
@@ -86,7 +138,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settingsWithNullFilter = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = null!,
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -94,7 +147,8 @@ public class AppSettingsValidatorTests
         };
         var settingsWithEmptyFilter = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api", " "],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -121,7 +175,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = null!,
             Jira = CreateValidJiraOptions(),
@@ -159,7 +214,8 @@ public class AppSettingsValidatorTests
         };
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = invalidBitbucket,
             Jira = CreateValidJiraOptions(),
@@ -187,7 +243,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = null!,
@@ -220,7 +277,8 @@ public class AppSettingsValidatorTests
         };
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = invalidJira,
@@ -255,7 +313,8 @@ public class AppSettingsValidatorTests
         };
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = jira,
@@ -279,7 +338,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -303,7 +363,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -331,7 +392,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -358,7 +420,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -383,7 +446,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -412,7 +476,8 @@ public class AppSettingsValidatorTests
         var sut = new AppSettingsValidator();
         var settings = new AppSettings
         {
-            CsvFilePath = csvFile.Path,
+            TargetCsvFilePath = csvFile.Path,
+            DevCsvFilePath = csvFile.Path,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -434,7 +499,8 @@ public class AppSettingsValidatorTests
     private static AppSettings CreateValidSettings(string csvPath) =>
         new()
         {
-            CsvFilePath = csvPath,
+            TargetCsvFilePath = csvPath,
+            DevCsvFilePath = csvPath,
             CsvComponentNamesFilter = ["api"],
             Bitbucket = CreateValidBitbucketOptions(),
             Jira = CreateValidJiraOptions(),
@@ -489,3 +555,4 @@ public class AppSettingsValidatorTests
         }
     }
 }
+

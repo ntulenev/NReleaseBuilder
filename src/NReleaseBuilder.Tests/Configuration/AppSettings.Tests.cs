@@ -14,19 +14,22 @@ public class AppSettingsTests
         // Arrange
         var settings = new AppSettings
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "dev-components.csv",
+            TargetCsvFilePath = "target-components.csv",
             Bitbucket = CreateBitbucketOptions(),
             Jira = CreateJiraOptions(),
         };
 
         // Act
-        var csvPath = settings.CsvFilePath;
+        var devCsvPath = settings.DevCsvFilePath;
+        var targetCsvPath = settings.TargetCsvFilePath;
         var filter = settings.CsvComponentNamesFilter;
         var pdf = settings.Pdf;
         var excel = settings.Excel;
 
         // Assert
-        csvPath.Should().Be("components.csv");
+        devCsvPath.Should().Be("dev-components.csv");
+        targetCsvPath.Should().Be("target-components.csv");
         filter.Should().NotBeNull();
         filter.Should().BeEmpty();
         settings.Bitbucket.Should().NotBeNull();
@@ -42,7 +45,8 @@ public class AppSettingsTests
         // Arrange
         var settings = new AppSettings
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "dev-components.csv",
+            TargetCsvFilePath = "target-components.csv",
             Bitbucket = CreateBitbucketOptions(),
             Jira = CreateJiraOptions(),
         };
@@ -62,7 +66,8 @@ public class AppSettingsTests
         // Arrange
         var settings = new AppSettings
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "dev-components.csv",
+            TargetCsvFilePath = "target-components.csv",
             Bitbucket = CreateBitbucketOptions(),
             Jira = CreateJiraOptions(),
             CsvComponentGroups =

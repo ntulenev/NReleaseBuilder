@@ -38,7 +38,8 @@ public sealed class RepositoryNameNormalizer : IRepositoryNameNormalizer
             normalizedRows.Add(new ComponentRow(
                 row.Component,
                 _bitbucketOptions.ResolveRepositoryName(row.Repository),
-                row.Version));
+                row.Version,
+                row.IsReleased));
         }
 
         return normalizedRows;

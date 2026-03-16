@@ -11,6 +11,8 @@ namespace NReleaseBuilder.Bitbucket;
 /// </summary>
 public sealed class ComponentVersionChecker : IComponentVersionChecker
 {
+    internal static readonly VersionLabel _notReleasedYetVersion = new("Not released yet");
+
     /// <inheritdoc />
     public IReadOnlyList<ComponentCheckRow> BuildRows(
         IReadOnlyList<ComponentRow> componentRows,
@@ -41,6 +43,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
             }
 
             var resolvedRepositoryName = lookup.ResolvedRepository;
+            var displayCurrentVersion = row.IsReleased ? row.Version : _notReleasedYetVersion;
 
             if (lookup.IsRepositoryMissing)
             {
@@ -48,7 +51,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     new ComponentCheckIndex(i + 1),
                     row.Component,
                     resolvedRepositoryName,
-                    row.Version,
+                    displayCurrentVersion,
                     CheckStatus.RepositoryNotFound,
                     new RowDetails("Repository was not found in Bitbucket workspace."),
                     []));
@@ -61,20 +64,22 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     new ComponentCheckIndex(i + 1),
                     row.Component,
                     resolvedRepositoryName,
-                    row.Version,
+                    displayCurrentVersion,
                     CheckStatus.BitbucketError,
                     new RowDetails(lookup.Error),
                     []));
                 continue;
             }
 
-            if (!VersionParser.TryParse(row.Version, out var currentVersion))
+            var hasCurrentVersion = VersionParser.TryParse(row.Version, out var currentVersion);
+
+            if (row.IsReleased && !hasCurrentVersion)
             {
                 result.Add(new ComponentCheckRow(
                     new ComponentCheckIndex(i + 1),
                     row.Component,
                     resolvedRepositoryName,
-                    row.Version,
+                    displayCurrentVersion,
                     CheckStatus.InvalidCurrentVersion,
                     new RowDetails("Current version is not a valid tag format."),
                     []));
@@ -83,7 +88,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
 
             var newerVersions = lookup.Tags
                 .Select(tag => (Tag: tag, IsValid: VersionParser.TryParse(tag.Name, out var parsed), Parsed: parsed))
-                .Where(x => x.IsValid && x.Parsed > currentVersion)
+                .Where(x => x.IsValid && (!row.IsReleased || (hasCurrentVersion && x.Parsed > currentVersion)))
                 .OrderBy(x => x.Parsed)
                 .ThenBy(x => x.Tag.Name.Value, StringComparer.OrdinalIgnoreCase)
                 .Select(x => new VersionJiraRow(
@@ -104,7 +109,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                     new ComponentCheckIndex(i + 1),
                     row.Component,
                     resolvedRepositoryName,
-                    row.Version,
+                    displayCurrentVersion,
                     CheckStatus.UpToDate,
                     new RowDetails("-"),
                     []));
@@ -115,7 +120,7 @@ public sealed class ComponentVersionChecker : IComponentVersionChecker
                 new ComponentCheckIndex(i + 1),
                 row.Component,
                 resolvedRepositoryName,
-                row.Version,
+                displayCurrentVersion,
                 CheckStatus.Outdated,
                 new RowDetails("-"),
                 newerVersions));

@@ -89,7 +89,8 @@ public class MiniExcelContentComposerTests
     private static AppSettings CreateSettings() =>
         new()
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
             CsvComponentNamesFilter = [],
             Bitbucket = new BitbucketOptions
             {

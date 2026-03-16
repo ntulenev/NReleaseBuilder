@@ -573,7 +573,8 @@ public class GeneralFacadeRendererTests
     private static AppSettings CreateSettings(IReadOnlyList<string>? allowedStatuses = null) =>
         new()
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
             CsvComponentNamesFilter = [],
             Bitbucket = new BitbucketOptions
             {

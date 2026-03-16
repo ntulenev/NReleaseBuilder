@@ -348,7 +348,8 @@ public class PdfContentComposerTests
     private static AppSettings CreateAppSettings(string jiraBaseUrl) =>
         new()
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
             Bitbucket = new BitbucketOptions
             {
                 BaseUrl = new Uri("https://api.bitbucket.org/2.0"),

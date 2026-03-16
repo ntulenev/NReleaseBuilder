@@ -56,6 +56,7 @@ public class ComponentVersionCheckerTests
             Component("invalid-version-component", "repo-invalid-current", "invalid"),
             Component("up-to-date-component", "repo-up-to-date", "1.2.0"),
             Component("outdated-component", "repo-outdated", "1.0.0"),
+            Component("not-released-component", "repo-not-released", "5.0.0", isReleased: false),
         ];
 
         IReadOnlyDictionary<RepositoryName, RepositoryTagLookup> lookups =
@@ -90,13 +91,20 @@ public class ComponentVersionCheckerTests
                                 new Uri("https://bitbucket.example.test/workspace/repo-outdated/pull-requests/10")),
                             CreateTag("invalid", "TASK-30", "Ignored", "Done"),
                         ]),
+                [new RepositoryName("repo-not-released")] =
+                    RepositoryTagLookup.Success(
+                        new RepositoryName("resolved-not-released-repo"),
+                        [
+                            CreateTag("1.0.0", "TASK-40", "First released", "Done"),
+                            CreateTag("2.0.0", "TASK-50", "Second released", "In Progress"),
+                        ]),
             };
 
         // Act
         var result = sut.BuildRows(rows, lookups);
 
         // Assert
-        result.Should().HaveCount(6);
+        result.Should().HaveCount(7);
 
         result[0].Index.Value.Should().Be(1);
         result[0].Status.Should().Be(CheckStatus.BitbucketError);
@@ -134,13 +142,26 @@ public class ComponentVersionCheckerTests
         result[5].NewerVersions[1].Version.Value.Should().Be("2.0.0");
         result[5].NewerVersions[1].JiraTask.Value.Should().Be("TASK-20");
         result[5].NewerVersions[1].PullRequestUrl.Should().BeNull();
+
+        result[6].Index.Value.Should().Be(7);
+        result[6].Status.Should().Be(CheckStatus.Outdated);
+        result[6].Repository.Value.Should().Be("resolved-not-released-repo");
+        result[6].CurrentVersion.Value.Should().Be("Not released yet");
+        result[6].NewerVersions.Should().HaveCount(2);
+        result[6].NewerVersions[0].Version.Value.Should().Be("1.0.0");
+        result[6].NewerVersions[1].Version.Value.Should().Be("2.0.0");
     }
 
-    private static ComponentRow Component(string component, string repository, string version) =>
+    private static ComponentRow Component(
+        string component,
+        string repository,
+        string version,
+        bool isReleased = true) =>
         new(
             new ComponentName(component),
             new RepositoryName(repository),
-            new VersionLabel(version));
+            new VersionLabel(version),
+            isReleased);
 
     private static RepositoryTagInfo CreateTag(
         string version,

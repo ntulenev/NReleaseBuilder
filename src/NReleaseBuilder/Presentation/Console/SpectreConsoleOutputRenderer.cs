@@ -30,7 +30,8 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
     public void RenderHeader()
     {
         AnsiConsole.Write(new Rule("[bold deepskyblue1]Components Version Check[/]").RuleStyle("grey").LeftJustified());
-        AnsiConsole.MarkupLine($"[grey]Source:[/] [silver]{Markup.Escape(_settings.CsvFilePath)}[/]");
+        AnsiConsole.MarkupLine($"[grey]Dev Source:[/] [silver]{Markup.Escape(_settings.DevCsvFilePath)}[/]");
+        AnsiConsole.MarkupLine($"[grey]Target Source:[/] [silver]{Markup.Escape(_settings.TargetCsvFilePath)}[/]");
         AnsiConsole.MarkupLine($"[grey]Workspace:[/] [silver]{Markup.Escape(_settings.Bitbucket.Workspace)}[/]");
         if (_settings.Jira.AllowedTaskStatuses.Count > 0)
         {
@@ -552,6 +553,43 @@ public sealed class SpectreConsoleOutputRenderer : IConsoleOutputRenderer
 
         return $"[bold {color}]{counterLabel}[/] [grey](current: {Markup.Escape(currentVersion)})[/]";
     }
+
+    /// <inheritdoc />
+    public void PrintComponentSourceDifferences(IReadOnlyList<ComponentSourceDifferenceRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(new Rule("[bold orange1]Component Source Differences[/]").RuleStyle("grey").LeftJustified());
+
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderColor(Color.Grey)
+            .Expand();
+
+        _ = table.AddColumn(new TableColumn("[bold deepskyblue1]Component[/]"));
+        _ = table.AddColumn(new TableColumn("[bold]Dev[/]").Centered());
+        _ = table.AddColumn(new TableColumn("[bold]Target[/]").Centered());
+        _ = table.AddColumn(new TableColumn("[bold]Settings[/]").Centered());
+
+        foreach (var row in rows)
+        {
+            _ = table.AddRow(
+                new Markup(Markup.Escape(row.Component.Value)),
+                new Markup(FormatPresenceMarkup(row.IsInDev)),
+                new Markup(FormatPresenceMarkup(row.IsInTarget)),
+                new Markup(FormatPresenceMarkup(row.IsInSettings)));
+        }
+
+        AnsiConsole.Write(table);
+    }
+
+    private static string FormatPresenceMarkup(bool isPresent) => isPresent ? "[green]+[/]" : "[red]-[/]";
 
     private readonly AppSettings _settings;
     private static readonly Color[] _statusChartColors =

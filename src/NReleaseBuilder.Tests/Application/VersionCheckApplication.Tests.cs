@@ -134,6 +134,9 @@ public class VersionCheckApplicationTests
             .Setup(x => x.Read())
             .Callback(() => csvReadCount++)
             .Returns((IReadOnlyList<ComponentRow>?)null);
+        csvReaderMock
+            .Setup(x => x.ReadSourceSnapshot())
+            .Returns((ComponentSourceSnapshot?)null);
 
         var componentsVersionBuilderMock = new Mock<IComponentsVersionBuilder>(MockBehavior.Strict);
         var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
@@ -180,6 +183,9 @@ public class VersionCheckApplicationTests
             .Setup(x => x.Read())
             .Callback(() => csvReadCount++)
             .Returns(csvRows);
+        csvReaderMock
+            .Setup(x => x.ReadSourceSnapshot())
+            .Returns((ComponentSourceSnapshot?)null);
 
         var componentsVersionBuilderMock = new Mock<IComponentsVersionBuilder>(MockBehavior.Strict);
         var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
@@ -239,6 +245,9 @@ public class VersionCheckApplicationTests
             .Setup(x => x.Read())
             .Callback(() => csvReadCount++)
             .Returns(componentRows);
+        csvReaderMock
+            .Setup(x => x.ReadSourceSnapshot())
+            .Returns((ComponentSourceSnapshot?)null);
 
         var componentsVersionBuilderMock = new Mock<IComponentsVersionBuilder>(MockBehavior.Strict);
         componentsVersionBuilderMock
@@ -337,6 +346,9 @@ public class VersionCheckApplicationTests
             .Setup(x => x.Read())
             .Callback(() => csvReadCount++)
             .Returns(componentRows);
+        csvReaderMock
+            .Setup(x => x.ReadSourceSnapshot())
+            .Returns((ComponentSourceSnapshot?)null);
 
         var componentsVersionBuilderMock = new Mock<IComponentsVersionBuilder>(MockBehavior.Strict);
         componentsVersionBuilderMock
@@ -442,6 +454,9 @@ public class VersionCheckApplicationTests
         csvReaderMock
             .Setup(x => x.Read())
             .Returns(componentRows);
+        csvReaderMock
+            .Setup(x => x.ReadSourceSnapshot())
+            .Returns((ComponentSourceSnapshot?)null);
 
         var componentsVersionBuilderMock = new Mock<IComponentsVersionBuilder>(MockBehavior.Strict);
         componentsVersionBuilderMock
@@ -487,6 +502,88 @@ public class VersionCheckApplicationTests
         result.Should().Be(0);
     }
 
+    [Fact(DisplayName = "RunAsync prints component source differences at the end when sources differ from settings.")]
+    [Trait("Category", "Unit")]
+    public async Task RunAsyncPrintsComponentSourceDifferencesAtTheEndWhenSourcesDifferFromSettings()
+    {
+        // Arrange
+        IReadOnlyList<ComponentCheckRow> expectedRows = [];
+        var sourceSnapshot = new ComponentSourceSnapshot(
+        [
+            new ComponentName("service1"),
+        ],
+        [
+            new ComponentName("service3"),
+        ]);
+        IReadOnlyList<ComponentSourceDifferenceRow>? capturedDifferenceRows = null;
+
+        var csvReaderMock = new Mock<ICsvComponentReader>(MockBehavior.Strict);
+        csvReaderMock
+            .Setup(x => x.Read(It.Is<IReadOnlyList<string>>(filter =>
+                filter.Count == 2
+                && filter[0] == "service1"
+                && filter[1] == "service2")))
+            .Returns(new List<ComponentRow>
+            {
+                Component("service3", "repo-service3", "1.0.0"),
+            });
+        csvReaderMock
+            .Setup(x => x.ReadSourceSnapshot())
+            .Returns(sourceSnapshot);
+
+        var componentsVersionBuilderMock = new Mock<IComponentsVersionBuilder>(MockBehavior.Strict);
+        componentsVersionBuilderMock
+            .Setup(x => x.BuildAsync(
+                It.IsAny<IReadOnlyList<ComponentRow>>(),
+                It.IsAny<RepositoryVersionContext>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedRows);
+
+        var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
+        rendererMock
+            .Setup(x => x.SetupContext(It.IsAny<ReportRunDefinition>()));
+        rendererMock
+            .Setup(x => x.ResetContext());
+        rendererMock
+            .Setup(x => x.RenderHeader());
+        rendererMock
+            .Setup(x => x.PrintRepositoryCheckCount(It.Is<int>(count => count == 1)));
+        rendererMock
+            .Setup(x => x.RenderResults(It.Is<IReadOnlyList<ComponentCheckRow>>(rows => ReferenceEquals(rows, expectedRows))));
+        rendererMock
+            .Setup(x => x.PrintComponentSourceDifferences(It.IsAny<IReadOnlyList<ComponentSourceDifferenceRow>>()))
+            .Callback<IReadOnlyList<ComponentSourceDifferenceRow>>(rows => capturedDifferenceRows = rows);
+
+        var settings = CreateOptions(csvComponentGroups:
+        [
+            new CsvComponentGroupOptions
+            {
+                Name = "Group",
+                ComponentNames = ["service1", "service2"],
+                PdfOutputPath = "group.pdf",
+                ExcelOutputPath = "group.xlsx",
+            },
+        ]);
+
+        var sut = new VersionCheckApplication(
+            csvReaderMock.Object,
+            CreateRepositoryNameNormalizer(),
+            componentsVersionBuilderMock.Object,
+            rendererMock.Object,
+            settings);
+
+        // Act
+        var result = await sut.RunAsync(CancellationToken.None);
+
+        // Assert
+        result.Should().Be(0);
+        capturedDifferenceRows.Should().NotBeNull();
+        capturedDifferenceRows.Should().Equal(
+            new ComponentSourceDifferenceRow(new ComponentName("service1"), true, false, true),
+            new ComponentSourceDifferenceRow(new ComponentName("service2"), false, false, true),
+            new ComponentSourceDifferenceRow(new ComponentName("service3"), false, true, false));
+    }
+
     private static ComponentRow Component(string component, string repository, string version) =>
         new(
             new ComponentName(component),
@@ -498,11 +595,14 @@ public class VersionCheckApplicationTests
         new(CreateOptions(repositoryNameOverrides));
 
     private static IOptions<AppSettings> CreateOptions(
-        IReadOnlyDictionary<string, string>? repositoryNameOverrides = null)
+        IReadOnlyDictionary<string, string>? repositoryNameOverrides = null,
+        IReadOnlyList<CsvComponentGroupOptions>? csvComponentGroups = null)
     {
         var settings = new AppSettings
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
+            CsvComponentGroups = csvComponentGroups ?? [],
             Bitbucket = new BitbucketOptions
             {
                 BaseUrl = new Uri("https://bitbucket.example.test/"),

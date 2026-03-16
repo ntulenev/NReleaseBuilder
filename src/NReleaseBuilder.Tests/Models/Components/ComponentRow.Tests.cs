@@ -21,10 +21,12 @@ public class ComponentRowTests
         var component = row.Component.Value;
         var repository = row.Repository.Value;
         var version = row.Version.Value;
+        var isReleased = row.IsReleased;
 
         // Assert
         component.Should().Be("component");
         repository.Should().Be("repo");
         version.Should().Be("1.0.0");
+        isReleased.Should().BeTrue();
     }
 }

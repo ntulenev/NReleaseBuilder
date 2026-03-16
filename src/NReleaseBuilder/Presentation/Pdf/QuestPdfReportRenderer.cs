@@ -80,7 +80,8 @@ public sealed class QuestPdfReportRenderer : IPdfReportRenderer
                                 CultureInfo.InvariantCulture,
                                 "Generated: {0:yyyy-MM-dd HH:mm:ss zzz}",
                                 DateTimeOffset.Now));
-                        _ = column.Item().Text("Source: " + _settings.CsvFilePath);
+                        _ = column.Item().Text("Dev Source: " + _settings.DevCsvFilePath);
+                        _ = column.Item().Text("Target Source: " + _settings.TargetCsvFilePath);
                         _ = column.Item().Text("Workspace: " + _settings.Bitbucket.Workspace);
                         if (!string.IsNullOrWhiteSpace(groupName))
                         {

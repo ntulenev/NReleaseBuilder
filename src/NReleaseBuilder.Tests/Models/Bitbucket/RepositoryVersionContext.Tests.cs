@@ -55,9 +55,32 @@ public class RepositoryVersionContextTests
             .Should().BeFalse();
     }
 
-    private static ComponentRow Row(string component, string repository, string version) =>
+    [Fact(DisplayName = "RepositoryVersionContext omits min version when repository has unreleased components.")]
+    [Trait("Category", "Unit")]
+    public void BuildRepositoryVersionContextOmitsMinVersionWhenRepositoryHasUnreleasedComponents()
+    {
+        // Arrange
+        IReadOnlyList<ComponentRow> rows =
+        [
+            Row("component-a", "repo-a", "2.0.0"),
+            Row("component-b", "repo-a", "3.0.0", isReleased: false),
+            Row("component-c", "repo-b", "1.0.0"),
+        ];
+
+        // Act
+        var context = RepositoryVersionContext.BuildRepositoryVersionContext(rows);
+
+        // Assert
+        context.MinCurrentVersionsByRepository.ContainsKey(new RepositoryName("repo-a"))
+            .Should().BeFalse();
+        context.MinCurrentVersionsByRepository[new RepositoryName("repo-b")]
+            .Should().Be(NuGetVersion.Parse("1.0.0"));
+    }
+
+    private static ComponentRow Row(string component, string repository, string version, bool isReleased = true) =>
         new(
             new ComponentName(component),
             new RepositoryName(repository),
-            new VersionLabel(version));
+            new VersionLabel(version),
+            isReleased);
 }

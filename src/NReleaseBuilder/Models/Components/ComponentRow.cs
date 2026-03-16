@@ -13,12 +13,18 @@ public readonly record struct ComponentRow
     /// </summary>
     /// <param name="component">Component name.</param>
     /// <param name="repository">Repository name.</param>
-    /// <param name="version">Current version from image tag.</param>
-    public ComponentRow(ComponentName component, RepositoryName repository, VersionLabel version)
+    /// <param name="version">Version from image tag.</param>
+    /// <param name="isReleased">Whether the version is already released in the target environment.</param>
+    public ComponentRow(
+        ComponentName component,
+        RepositoryName repository,
+        VersionLabel version,
+        bool isReleased = true)
     {
         Component = component;
         Repository = repository;
         Version = version;
+        IsReleased = isReleased;
     }
 
     /// <summary>
@@ -32,8 +38,13 @@ public readonly record struct ComponentRow
     public RepositoryName Repository { get; }
 
     /// <summary>
-    /// Current version from image tag.
+    /// Version from image tag.
     /// </summary>
     public VersionLabel Version { get; }
+
+    /// <summary>
+    /// Whether the component version is already released in the target environment.
+    /// </summary>
+    public bool IsReleased { get; }
 }
 

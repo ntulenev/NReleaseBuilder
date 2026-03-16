@@ -88,6 +88,14 @@ public class SpectreConsoleOutputRendererTests
             sut.RenderTable(rows);
             sut.RenderSummary(rows);
             sut.RenderUniqueJiraTaskStatusChart(rows);
+            sut.PrintComponentSourceDifferences(
+            [
+                new ComponentSourceDifferenceRow(
+                    new ComponentName("service1"),
+                    true,
+                    false,
+                    true),
+            ]);
             sut.PrintError(new ErrorMessage("boom"));
         });
 
@@ -243,6 +251,7 @@ public class SpectreConsoleOutputRendererTests
         Action renderTable = () => sut.RenderTable(null!);
         Action renderSummary = () => sut.RenderSummary(null!);
         Action renderChart = () => sut.RenderUniqueJiraTaskStatusChart(null!);
+        Action printComponentSourceDifferences = () => sut.PrintComponentSourceDifferences(null!);
 
         // Assert
         printNoComponents.Should().Throw<ArgumentNullException>()
@@ -256,6 +265,8 @@ public class SpectreConsoleOutputRendererTests
         renderSummary.Should().Throw<ArgumentNullException>()
             .WithParameterName("rows");
         renderChart.Should().Throw<ArgumentNullException>()
+            .WithParameterName("rows");
+        printComponentSourceDifferences.Should().Throw<ArgumentNullException>()
             .WithParameterName("rows");
     }
 
@@ -281,7 +292,8 @@ public class SpectreConsoleOutputRendererTests
     private static AppSettings CreateSettings(IReadOnlyList<string>? allowedTaskStatuses = null) =>
         new()
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
             CsvComponentNamesFilter = [],
             Bitbucket = new BitbucketOptions
             {

@@ -175,6 +175,79 @@ public class CsvComponentReaderTests
             new ComponentRow(new ComponentName("gateway"), new RepositoryName("repo-gateway"), new VersionLabel("1.0.0")));
     }
 
+    [Fact(DisplayName = "CsvComponentReader Read merges target and dev rows and marks dev-only rows as unreleased.")]
+    [Trait("Category", "Integration")]
+    public void ReadMergesTargetAndDevRowsAndMarksDevOnlyRowsAsUnreleased()
+    {
+        // Arrange
+        using var targetCsvFile = CreateTempCsvFile(
+            "container,image\n"
+            + "api,registry/org/repo-api:1.0.0\n"
+            + "worker,registry/org/repo-worker:2.0.0\n");
+        using var devCsvFile = CreateTempCsvFile(
+            "container,image\n"
+            + "api,registry/org/repo-api:1.1.0\n"
+            + "gateway,registry/org/repo-gateway:3.0.0\n");
+
+        var settings = CreateSettings(
+            csvFilePath: string.Empty,
+            targetCsvFilePath: targetCsvFile.Path,
+            devCsvFilePath: devCsvFile.Path);
+        var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
+        optionsMock.Setup(x => x.Value).Returns(settings);
+
+        var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
+        var sut = new CsvComponentReader(optionsMock.Object, renderer);
+
+        // Act
+        var rows = sut.Read();
+
+        // Assert
+        rows.Should().NotBeNull();
+        rows.Should().Equal(
+            new ComponentRow(new ComponentName("api"), new RepositoryName("repo-api"), new VersionLabel("1.0.0")),
+            new ComponentRow(new ComponentName("gateway"), new RepositoryName("repo-gateway"), new VersionLabel("3.0.0"), isReleased: false),
+            new ComponentRow(new ComponentName("worker"), new RepositoryName("repo-worker"), new VersionLabel("2.0.0")));
+    }
+
+    [Fact(DisplayName = "CsvComponentReader ReadSourceSnapshot returns unfiltered source component sets.")]
+    [Trait("Category", "Integration")]
+    public void ReadSourceSnapshotReturnsUnfilteredSourceComponentSets()
+    {
+        // Arrange
+        using var targetCsvFile = CreateTempCsvFile(
+            "container,image\n"
+            + "service2,registry/org/repo-service2:1.0.0\n"
+            + "service1,registry/org/repo-service1:1.0.0\n");
+        using var devCsvFile = CreateTempCsvFile(
+            "container,image\n"
+            + "service1,registry/org/repo-service1:1.1.0\n"
+            + "service3,registry/org/repo-service3:2.0.0\n");
+
+        var settings = CreateSettings(
+            csvFilePath: string.Empty,
+            componentNamesFilter: ["service1"],
+            targetCsvFilePath: targetCsvFile.Path,
+            devCsvFilePath: devCsvFile.Path);
+        var optionsMock = new Mock<IOptions<AppSettings>>(MockBehavior.Strict);
+        optionsMock.Setup(x => x.Value).Returns(settings);
+
+        var renderer = new Mock<IRenderer>(MockBehavior.Strict).Object;
+        var sut = new CsvComponentReader(optionsMock.Object, renderer);
+
+        // Act
+        var snapshot = sut.ReadSourceSnapshot();
+
+        // Assert
+        snapshot.Should().NotBeNull();
+        snapshot!.DevComponents.Should().Equal(
+            new ComponentName("service1"),
+            new ComponentName("service3"));
+        snapshot.TargetComponents.Should().Equal(
+            new ComponentName("service1"),
+            new ComponentName("service2"));
+    }
+
     [Fact(DisplayName = "CsvComponentReader Read returns null and prints error when csv is empty.")]
     [Trait("Category", "Integration")]
     public void ReadReturnsNullAndPrintsErrorWhenCsvIsEmpty()
@@ -262,10 +335,15 @@ public class CsvComponentReaderTests
         printErrorCount.Should().Be(1);
     }
 
-    private static AppSettings CreateSettings(string csvFilePath, IReadOnlyList<string>? componentNamesFilter = null) =>
+    private static AppSettings CreateSettings(
+        string csvFilePath,
+        IReadOnlyList<string>? componentNamesFilter = null,
+        string? targetCsvFilePath = null,
+        string? devCsvFilePath = null) =>
         new()
         {
-            CsvFilePath = csvFilePath,
+            TargetCsvFilePath = targetCsvFilePath ?? csvFilePath,
+            DevCsvFilePath = devCsvFilePath ?? csvFilePath,
             CsvComponentNamesFilter = componentNamesFilter ?? [],
             Bitbucket = new BitbucketOptions
             {

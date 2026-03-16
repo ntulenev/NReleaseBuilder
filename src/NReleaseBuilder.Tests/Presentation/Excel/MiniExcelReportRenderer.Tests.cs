@@ -189,7 +189,8 @@ public class MiniExcelReportRendererTests
     private static AppSettings CreateSettings(string outputDirectory, bool excelEnabled) =>
         new()
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
             CsvComponentNamesFilter = [],
             Bitbucket = new BitbucketOptions
             {

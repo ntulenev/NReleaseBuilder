@@ -140,7 +140,8 @@ public class ExcelReportFileStoreTests
     private static AppSettings CreateSettings(string excelOutputPath) =>
         new()
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
             CsvComponentNamesFilter = [],
             Bitbucket = new BitbucketOptions
             {

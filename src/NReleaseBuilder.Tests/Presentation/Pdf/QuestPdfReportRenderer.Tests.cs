@@ -243,7 +243,8 @@ public class QuestPdfReportRendererTests
     private static AppSettings CreateSettings(bool pdfEnabled, string outputPath = "report.pdf") =>
         new()
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
             CsvComponentNamesFilter = [],
             Bitbucket = new BitbucketOptions
             {

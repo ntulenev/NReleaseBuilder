@@ -10,11 +10,18 @@ namespace NReleaseBuilder.Configuration;
 public sealed class AppSettings
 {
     /// <summary>
-    /// Path to source CSV file with component images.
+    /// Path to the development CSV file with component images.
     /// </summary>
     [Required]
     [MinLength(1)]
-    public required string CsvFilePath { get; init; }
+    public required string DevCsvFilePath { get; init; }
+
+    /// <summary>
+    /// Path to the target CSV file with component images.
+    /// </summary>
+    [Required]
+    [MinLength(1)]
+    public required string TargetCsvFilePath { get; init; }
 
     /// <summary>
     /// Optional allow-list of component names loaded from CSV.

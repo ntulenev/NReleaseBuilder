@@ -133,6 +133,10 @@ public sealed class GeneralFacadeRenderer : IRenderer
     public void RenderSummary(IReadOnlyList<ComponentCheckRow> rows) => _consoleRenderer.RenderSummary(rows);
 
     /// <inheritdoc />
+    public void PrintComponentSourceDifferences(IReadOnlyList<ComponentSourceDifferenceRow> rows) =>
+        _consoleRenderer.PrintComponentSourceDifferences(rows);
+
+    /// <inheritdoc />
     public void PrintError(ErrorMessage message) => _consoleRenderer.PrintError(message);
 
     private readonly IConsoleOutputRenderer _consoleRenderer;

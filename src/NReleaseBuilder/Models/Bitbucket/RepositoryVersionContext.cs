@@ -49,10 +49,20 @@ public sealed class RepositoryVersionContext
     private static Dictionary<RepositoryName, NuGetVersion> BuildMinCurrentVersionsByRepository(
         IReadOnlyList<ComponentRow> componentRows)
     {
+        var repositoriesWithUnreleasedComponents = componentRows
+            .Where(static row => !row.IsReleased)
+            .Select(static row => row.Repository)
+            .ToHashSet();
+
         var minCurrentVersionsByRepository = new Dictionary<RepositoryName, NuGetVersion>();
 
         foreach (var row in componentRows)
         {
+            if (!row.IsReleased || repositoriesWithUnreleasedComponents.Contains(row.Repository))
+            {
+                continue;
+            }
+
             if (!VersionParser.TryParse(row.Version, out var parsedVersion))
             {
                 continue;

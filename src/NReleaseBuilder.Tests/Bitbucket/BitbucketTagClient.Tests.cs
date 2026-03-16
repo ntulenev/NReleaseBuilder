@@ -171,7 +171,8 @@ public class BitbucketTagClientTests
     {
         var settings = new AppSettings
         {
-            CsvFilePath = "components.csv",
+            DevCsvFilePath = "components.csv",
+            TargetCsvFilePath = "components.csv",
             Bitbucket = new BitbucketOptions
             {
                 BaseUrl = new Uri("https://bitbucket.example.test/"),

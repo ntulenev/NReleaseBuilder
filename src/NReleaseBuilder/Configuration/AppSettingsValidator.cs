@@ -18,7 +18,7 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
 
         var errors = new List<string>();
 
-        ValidateCsvPath(options.CsvFilePath, errors);
+        ValidateCsvPaths(options.TargetCsvFilePath, options.DevCsvFilePath, errors);
         ValidateCsvComponentNamesFilter(options.CsvComponentNamesFilter, errors);
         ValidateCsvComponentGroups(options.CsvComponentGroups, options.Pdf, options.Excel, errors);
         ValidateBitbucket(options.Bitbucket, errors);
@@ -31,17 +31,29 @@ public sealed class AppSettingsValidator : IValidateOptions<AppSettings>
             : ValidateOptionsResult.Fail(errors);
     }
 
-    private static void ValidateCsvPath(string csvFilePath, List<string> errors)
+    private static void ValidateCsvPaths(
+        string targetCsvFilePath,
+        string devCsvFilePath,
+        List<string> errors)
     {
-        if (string.IsNullOrWhiteSpace(csvFilePath))
+        if (string.IsNullOrWhiteSpace(targetCsvFilePath))
         {
-            errors.Add("CsvFilePath is missing in appsettings.json.");
+            errors.Add("TargetCsvFilePath is missing in appsettings.json.");
+        }
+        else if (!File.Exists(targetCsvFilePath))
+        {
+            errors.Add($"Target CSV file not found: {targetCsvFilePath}");
+        }
+
+        if (string.IsNullOrWhiteSpace(devCsvFilePath))
+        {
+            errors.Add("DevCsvFilePath is missing in appsettings.json.");
             return;
         }
 
-        if (!File.Exists(csvFilePath))
+        if (!File.Exists(devCsvFilePath))
         {
-            errors.Add($"CSV file not found: {csvFilePath}");
+            errors.Add($"Dev CSV file not found: {devCsvFilePath}");
         }
     }
 

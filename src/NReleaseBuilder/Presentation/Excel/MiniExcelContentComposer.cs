@@ -78,7 +78,8 @@ public sealed partial class MiniExcelContentComposer : IExcelContentComposer
 
         AddRow(values, layout, ExcelCellStyleKind.Title, "A", "Components Version Check", SUMMARY_COLUMN_COUNT);
         AddLabeledValueRow(values, layout, "Generated", DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture), SUMMARY_COLUMN_COUNT);
-        AddLabeledValueRow(values, layout, "Source", _settings.CsvFilePath, SUMMARY_COLUMN_COUNT);
+        AddLabeledValueRow(values, layout, "Dev Source", _settings.DevCsvFilePath, SUMMARY_COLUMN_COUNT);
+        AddLabeledValueRow(values, layout, "Target Source", _settings.TargetCsvFilePath, SUMMARY_COLUMN_COUNT);
         AddLabeledValueRow(values, layout, "Workspace", _settings.Bitbucket.Workspace, SUMMARY_COLUMN_COUNT);
         AddLabeledValueRow(values, layout, "Jira Status Filter", allowedStatuses.BuildStatusFilterLabel(), SUMMARY_COLUMN_COUNT);
         AddBlankRow(values, SUMMARY_COLUMN_COUNT);
