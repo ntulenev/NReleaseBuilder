@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using Microsoft.Extensions.Options;
 
 using NReleaseBuilder.Abstractions.Bitbucket;
@@ -91,6 +93,10 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
             repositoryForBitbucketCalls,
             tagsToInspect,
             cancellationToken).ConfigureAwait(false);
+        var pullRequestUrlsByCommit = await LoadPullRequestUrlsAsync(
+            repositoryForBitbucketCalls,
+            tagsToInspect,
+            cancellationToken).ConfigureAwait(false);
 
         await _jiraTaskResolver.PrimeTaskInfoCacheAsync(
             [.. commitInfosByCommit.Values],
@@ -98,7 +104,6 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
             cancellationToken).ConfigureAwait(false);
 
         var jiraCacheByCommit = new Dictionary<string, JiraTaskResolution>(StringComparer.OrdinalIgnoreCase);
-        var pullRequestUrlCacheByCommit = new Dictionary<string, Uri?>(StringComparer.OrdinalIgnoreCase);
         var enrichedTags = new List<RepositoryTagInfo>(tagsToInspect.Length);
 
         foreach (var tag in tagsToInspect)
@@ -112,8 +117,8 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
                 cancellationToken).ConfigureAwait(false);
             var pullRequestUrl = await ResolvePullRequestUrlAsync(
                 repositoryForBitbucketCalls,
+                pullRequestUrlsByCommit,
                 tag.CommitHash,
-                pullRequestUrlCacheByCommit,
                 cancellationToken).ConfigureAwait(false);
 
             enrichedTags.Add(new RepositoryTagInfo(
@@ -137,23 +142,80 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
         IReadOnlyList<RepositoryTagReference> tagsToInspect,
         CancellationToken cancellationToken)
     {
-        var commitInfosByCommit = new Dictionary<string, CommitInfo>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var commitHash in tagsToInspect
-                     .Select(static tag => tag.CommitHash)
-                     .Where(static commitHash => commitHash is not null)
-                     .Select(static commitHash => commitHash!.Value)
-                     .Distinct())
-        {
-            var commitInfo = await _bitbucketIntegrationCore.TryGetCommitMessageAsync(
+        var commitHashes = GetDistinctCommitHashes(tagsToInspect);
+        return await LoadByCommitHashAsync(
+            commitHashes,
+            (commitHash, token) => _bitbucketIntegrationCore.TryGetCommitMessageAsync(
                 repositoryForBitbucketCalls,
                 commitHash,
-                cancellationToken).ConfigureAwait(false);
+                token),
+            cancellationToken).ConfigureAwait(false);
+    }
 
-            commitInfosByCommit[commitHash.Value] = commitInfo;
+    private async Task<Dictionary<string, Uri?>> LoadPullRequestUrlsAsync(
+        RepositoryName repositoryForBitbucketCalls,
+        IReadOnlyList<RepositoryTagReference> tagsToInspect,
+        CancellationToken cancellationToken)
+    {
+        var commitHashes = GetDistinctCommitHashes(tagsToInspect);
+        return await LoadByCommitHashAsync(
+            commitHashes,
+            (commitHash, token) => _bitbucketIntegrationCore.TryGetPullRequestUrlByCommitAsync(
+                repositoryForBitbucketCalls,
+                commitHash,
+                token),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<Dictionary<string, TValue>> LoadByCommitHashAsync<TValue>(
+        CommitHash[] commitHashes,
+        Func<CommitHash, CancellationToken, Task<TValue>> loader,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(commitHashes);
+        ArgumentNullException.ThrowIfNull(loader);
+
+        if (commitHashes.Length == 0)
+        {
+            return new Dictionary<string, TValue>(StringComparer.OrdinalIgnoreCase);
         }
 
-        return commitInfosByCommit;
+        var resultsByCommit = new ConcurrentDictionary<string, TValue>(StringComparer.OrdinalIgnoreCase);
+        using var semaphore = new SemaphoreSlim(
+            _bitbucketOptions.MaxParallelRequests,
+            _bitbucketOptions.MaxParallelRequests);
+
+        var loadTasks = commitHashes.Select(async commitHash =>
+        {
+            await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                resultsByCommit[commitHash.Value] = await loader(
+                    commitHash,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _ = semaphore.Release();
+            }
+        });
+
+        await Task.WhenAll(loadTasks).ConfigureAwait(false);
+        return new Dictionary<string, TValue>(resultsByCommit, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static CommitHash[] GetDistinctCommitHashes(IReadOnlyList<RepositoryTagReference> tagsToInspect)
+    {
+        ArgumentNullException.ThrowIfNull(tagsToInspect);
+
+        return
+        [
+            .. tagsToInspect
+                .Select(static tag => tag.CommitHash)
+                .Where(static commitHash => commitHash is not null)
+                .Select(static commitHash => commitHash!.Value)
+                .Distinct()
+        ];
     }
 
     private async Task<JiraTaskResolution> ResolveJiraTaskResolutionAsync(
@@ -194,8 +256,8 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
 
     private async Task<Uri?> ResolvePullRequestUrlAsync(
         RepositoryName repositoryForBitbucketCalls,
+        Dictionary<string, Uri?> pullRequestUrlsByCommit,
         CommitHash? commitHash,
-        Dictionary<string, Uri?> pullRequestUrlCacheByCommit,
         CancellationToken cancellationToken)
     {
         if (commitHash is null)
@@ -203,18 +265,15 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
             return null;
         }
 
-        if (pullRequestUrlCacheByCommit.TryGetValue(commitHash.Value.Value, out var pullRequestUrl))
+        if (pullRequestUrlsByCommit.TryGetValue(commitHash.Value.Value, out var pullRequestUrl))
         {
             return pullRequestUrl;
         }
 
-        pullRequestUrl = await _bitbucketIntegrationCore.TryGetPullRequestUrlByCommitAsync(
+        return await _bitbucketIntegrationCore.TryGetPullRequestUrlByCommitAsync(
             repositoryForBitbucketCalls,
             commitHash.Value,
             cancellationToken).ConfigureAwait(false);
-
-        pullRequestUrlCacheByCommit[commitHash.Value.Value] = pullRequestUrl;
-        return pullRequestUrl;
     }
 
     private static RepositoryTagLookup? TryBuildFailedTagLookup(
