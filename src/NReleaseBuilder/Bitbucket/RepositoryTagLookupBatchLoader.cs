@@ -41,40 +41,24 @@ public sealed class RepositoryTagLookupBatchLoader : IRepositoryTagLookupBatchLo
 
         try
         {
-            var lookupsByRepository = new Dictionary<RepositoryName, RepositoryTagLookup>(repositories.Count);
-            var repositoryBatches = repositories
-                .Chunk(BITBUCKET_REPOSITORY_BATCH_SIZE)
-                .ToArray();
+            cancellationToken.ThrowIfCancellationRequested();
 
-            for (var batchIndex = 0; batchIndex < repositoryBatches.Length; batchIndex++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
+            _renderer.PrintRepositoryBatchProgress(
+                batchNumber: 1,
+                totalBatchCount: 1,
+                processedRepositoryCount: 0,
+                currentBatchRepositoryCount: repositories.Count,
+                totalRepositoryCount: repositories.Count);
 
-                var batchRepositories = repositoryBatches[batchIndex];
-                _renderer.PrintRepositoryBatchProgress(
-                    batchIndex + 1,
-                    repositoryBatches.Length,
-                    lookupsByRepository.Count,
-                    batchRepositories.Length,
-                    repositories.Count);
-
-                var batchLookups = await _renderer
-                    .RunBitbucketLoadingWithProgressAsync(
-                        batchRepositories,
-                        progress => _bitbucketTagClient.FetchRepositoryTagLookupsAsync(
-                            batchRepositories,
-                            minCurrentVersionsByRepository,
-                            progress,
-                            cancellationToken))
-                    .ConfigureAwait(false);
-
-                foreach (var (repository, lookup) in batchLookups)
-                {
-                    lookupsByRepository[repository] = lookup;
-                }
-            }
-
-            return lookupsByRepository;
+            return await _renderer
+                .RunBitbucketLoadingWithProgressAsync(
+                    repositories,
+                    progress => _bitbucketTagClient.FetchRepositoryTagLookupsAsync(
+                        repositories,
+                        minCurrentVersionsByRepository,
+                        progress,
+                        cancellationToken))
+                .ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
         {
@@ -103,8 +87,6 @@ public sealed class RepositoryTagLookupBatchLoader : IRepositoryTagLookupBatchLo
         _renderer.PrintError(
             new ErrorMessage($"Failed to load tags from Bitbucket: {exception.Message}"));
     }
-
-    private const int BITBUCKET_REPOSITORY_BATCH_SIZE = 10;
     private readonly IBitbucketTagClient _bitbucketTagClient;
     private readonly IRenderer _renderer;
 }

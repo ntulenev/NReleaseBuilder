@@ -96,24 +96,19 @@ public class RepositoryTagLookupBatchLoaderTests
             .WithParameterName("minCurrentVersionsByRepository");
     }
 
-    [Fact(DisplayName = "RepositoryTagLookupBatchLoader LoadAsync loads repositories in batches and merges results.")]
+    [Fact(DisplayName = "RepositoryTagLookupBatchLoader LoadAsync loads repositories in a single progress run.")]
     [Trait("Category", "Unit")]
-    public async Task LoadAsyncLoadsRepositoriesInBatchesAndMergesResults()
+    public async Task LoadAsyncLoadsRepositoriesInSingleProgressRun()
     {
         // Arrange
         var repositories = Enumerable.Range(1, 12)
             .Select(index => new RepositoryName($"repo-{index:D2}"))
             .ToArray();
-        var batch1 = repositories.Take(10).ToArray();
-        var batch2 = repositories.Skip(10).ToArray();
         IReadOnlyDictionary<RepositoryName, NuGetVersion> minVersions = repositories
             .ToDictionary(
                 keySelector: repository => repository,
                 elementSelector: _ => NuGetVersion.Parse("1.0.0"));
-        var batch1Lookups = batch1.ToDictionary(
-            keySelector: repository => repository,
-            elementSelector: repository => RepositoryTagLookup.Success(repository, []));
-        var batch2Lookups = batch2.ToDictionary(
+        var lookupsByRepository = repositories.ToDictionary(
             keySelector: repository => repository,
             elementSelector: repository => RepositoryTagLookup.Success(repository, []));
         using var cts = new CancellationTokenSource();
@@ -124,48 +119,25 @@ public class RepositoryTagLookupBatchLoaderTests
         var bitbucketTagClientMock = new Mock<IBitbucketTagClient>(MockBehavior.Strict);
         bitbucketTagClientMock
             .Setup(x => x.FetchRepositoryTagLookupsAsync(
-                It.Is<IReadOnlyList<RepositoryName>>(value => value.SequenceEqual(batch1)),
+                It.Is<IReadOnlyList<RepositoryName>>(value => value.SequenceEqual(repositories)),
                 It.Is<IReadOnlyDictionary<RepositoryName, NuGetVersion>>(value => ReferenceEquals(value, minVersions)),
                 It.Is<BitbucketProgressCallbacks?>(value => value != null),
                 It.Is<CancellationToken>(value => value == cts.Token)))
             .Callback(() => clientCallCount++)
-            .ReturnsAsync(batch1Lookups);
-        bitbucketTagClientMock
-            .Setup(x => x.FetchRepositoryTagLookupsAsync(
-                It.Is<IReadOnlyList<RepositoryName>>(value => value.SequenceEqual(batch2)),
-                It.Is<IReadOnlyDictionary<RepositoryName, NuGetVersion>>(value => ReferenceEquals(value, minVersions)),
-                It.Is<BitbucketProgressCallbacks?>(value => value != null),
-                It.Is<CancellationToken>(value => value == cts.Token)))
-            .Callback(() => clientCallCount++)
-            .ReturnsAsync(batch2Lookups);
+            .ReturnsAsync(lookupsByRepository);
 
         var rendererMock = new Mock<IRenderer>(MockBehavior.Strict);
         rendererMock
             .Setup(x => x.PrintRepositoryBatchProgress(
                 It.Is<int>(value => value == 1),
-                It.Is<int>(value => value == 2),
+                It.Is<int>(value => value == 1),
                 It.Is<int>(value => value == 0),
-                It.Is<int>(value => value == 10),
-                It.Is<int>(value => value == 12)))
-            .Callback(() => progressCallCount++);
-        rendererMock
-            .Setup(x => x.PrintRepositoryBatchProgress(
-                It.Is<int>(value => value == 2),
-                It.Is<int>(value => value == 2),
-                It.Is<int>(value => value == 10),
-                It.Is<int>(value => value == 2),
+                It.Is<int>(value => value == 12),
                 It.Is<int>(value => value == 12)))
             .Callback(() => progressCallCount++);
         rendererMock
             .Setup(x => x.RunBitbucketLoadingWithProgressAsync(
-                It.Is<IReadOnlyList<RepositoryName>>(value => value.SequenceEqual(batch1)),
-                It.Is<Func<BitbucketProgressCallbacks, Task<Dictionary<RepositoryName, RepositoryTagLookup>>>>(value => value != null)))
-            .Callback(() => runWithProgressCallCount++)
-            .Returns<IReadOnlyList<RepositoryName>, Func<BitbucketProgressCallbacks, Task<Dictionary<RepositoryName, RepositoryTagLookup>>>>(
-                (_, operation) => operation(new BitbucketProgressCallbacks()));
-        rendererMock
-            .Setup(x => x.RunBitbucketLoadingWithProgressAsync(
-                It.Is<IReadOnlyList<RepositoryName>>(value => value.SequenceEqual(batch2)),
+                It.Is<IReadOnlyList<RepositoryName>>(value => value.SequenceEqual(repositories)),
                 It.Is<Func<BitbucketProgressCallbacks, Task<Dictionary<RepositoryName, RepositoryTagLookup>>>>(value => value != null)))
             .Callback(() => runWithProgressCallCount++)
             .Returns<IReadOnlyList<RepositoryName>, Func<BitbucketProgressCallbacks, Task<Dictionary<RepositoryName, RepositoryTagLookup>>>>(
@@ -180,9 +152,9 @@ public class RepositoryTagLookupBatchLoaderTests
         var lookups = result ?? throw new InvalidOperationException("Expected non-null lookup dictionary.");
         lookups.Should().HaveCount(12);
         lookups.Keys.Should().BeEquivalentTo(repositories);
-        progressCallCount.Should().Be(2);
-        runWithProgressCallCount.Should().Be(2);
-        clientCallCount.Should().Be(2);
+        progressCallCount.Should().Be(1);
+        runWithProgressCallCount.Should().Be(1);
+        clientCallCount.Should().Be(1);
     }
 
     [Fact(DisplayName = "RepositoryTagLookupBatchLoader LoadAsync returns null and reports error on http failure.")]
