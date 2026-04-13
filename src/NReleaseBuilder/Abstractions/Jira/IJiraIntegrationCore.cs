@@ -17,4 +17,14 @@ public interface IJiraIntegrationCore
     Task<JiraTaskInfo> TryGetJiraTaskInfoAsync(
         JiraTaskReference jiraTask,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Loads Jira task metadata for multiple Jira task references in batches.
+    /// </summary>
+    /// <param name="jiraTasks">Jira task references.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Resolved Jira task metadata keyed by Jira task reference.</returns>
+    Task<IReadOnlyDictionary<JiraTaskReference, JiraTaskInfo>> TryGetJiraTaskInfosAsync(
+        IReadOnlyList<JiraTaskReference> jiraTasks,
+        CancellationToken cancellationToken);
 }

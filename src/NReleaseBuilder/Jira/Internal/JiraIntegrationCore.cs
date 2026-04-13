@@ -81,7 +81,84 @@ public sealed class JiraIntegrationCore : IJiraIntegrationCore, IDisposable
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<JiraTaskReference, JiraTaskInfo>> TryGetJiraTaskInfosAsync(
+        IReadOnlyList<JiraTaskReference> jiraTasks,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(jiraTasks);
+
+        if (jiraTasks.Count == 0)
+        {
+            return new Dictionary<JiraTaskReference, JiraTaskInfo>(JiraTaskReferenceComparer.Instance);
+        }
+
+        if (jiraTasks.Count == 1)
+        {
+            var jiraTask = jiraTasks[0];
+            return new Dictionary<JiraTaskReference, JiraTaskInfo>(JiraTaskReferenceComparer.Instance)
+            {
+                [jiraTask] = await TryGetJiraTaskInfoAsync(jiraTask, cancellationToken).ConfigureAwait(false),
+            };
+        }
+
+        var distinctTasks = jiraTasks
+            .Distinct(JiraTaskReferenceComparer.Instance)
+            .ToArray();
+        var jiraHttpClient = _httpClientFactory.CreateClient(HttpClientNames.JIRA);
+        var fieldIdentifiers = await ResolveFieldIdentifiersAsync(
+            jiraHttpClient,
+            cancellationToken).ConfigureAwait(false);
+
+        if (fieldIdentifiers.UseExpandedNames)
+        {
+            return await LoadIndividuallyAsync(distinctTasks, cancellationToken).ConfigureAwait(false);
+        }
+
+        var results = new Dictionary<JiraTaskReference, JiraTaskInfo>(JiraTaskReferenceComparer.Instance);
+
+        foreach (var jiraTaskChunk in distinctTasks.Chunk(JIRA_BATCH_SIZE))
+        {
+            var chunkResults = await TryGetJiraTaskInfosBySearchAsync(
+                jiraHttpClient,
+                jiraTaskChunk,
+                fieldIdentifiers,
+                cancellationToken).ConfigureAwait(false);
+
+            if (chunkResults is null)
+            {
+                foreach (var jiraTask in jiraTaskChunk)
+                {
+                    results[jiraTask] = await TryGetJiraTaskInfoAsync(jiraTask, cancellationToken).ConfigureAwait(false);
+                }
+
+                continue;
+            }
+
+            foreach (var (jiraTask, jiraTaskInfo) in chunkResults)
+            {
+                results[jiraTask] = jiraTaskInfo;
+            }
+        }
+
+        return results;
+    }
+
+    /// <inheritdoc />
     public void Dispose() => _fieldIdentifiersSemaphore.Dispose();
+
+    private async Task<IReadOnlyDictionary<JiraTaskReference, JiraTaskInfo>> LoadIndividuallyAsync(
+        IReadOnlyList<JiraTaskReference> jiraTasks,
+        CancellationToken cancellationToken)
+    {
+        var results = new Dictionary<JiraTaskReference, JiraTaskInfo>(JiraTaskReferenceComparer.Instance);
+
+        foreach (var jiraTask in jiraTasks)
+        {
+            results[jiraTask] = await TryGetJiraTaskInfoAsync(jiraTask, cancellationToken).ConfigureAwait(false);
+        }
+
+        return results;
+    }
 
     private async Task<JiraFieldIdentifiers> ResolveFieldIdentifiersAsync(
         HttpClient jiraHttpClient,
@@ -191,6 +268,107 @@ public sealed class JiraIntegrationCore : IJiraIntegrationCore, IDisposable
         return "Not found";
     }
 
+    private async Task<Dictionary<JiraTaskReference, JiraTaskInfo>?> TryGetJiraTaskInfosBySearchAsync(
+        HttpClient jiraHttpClient,
+        IReadOnlyList<JiraTaskReference> jiraTasks,
+        JiraFieldIdentifiers fieldIdentifiers,
+        CancellationToken cancellationToken)
+    {
+        var api3SearchUrl = BuildBatchSearchUrl(
+            jiraTasks,
+            fieldIdentifiers,
+            apiVersion: 3);
+
+        var api3Results = await TryGetJiraTaskInfosBySearchUrlAsync(
+            jiraHttpClient,
+            api3SearchUrl,
+            jiraTasks,
+            fieldIdentifiers,
+            cancellationToken).ConfigureAwait(false);
+
+        if (api3Results is not null)
+        {
+            return api3Results;
+        }
+
+        var api2SearchUrl = BuildBatchSearchUrl(
+            jiraTasks,
+            fieldIdentifiers,
+            apiVersion: 2);
+
+        return await TryGetJiraTaskInfosBySearchUrlAsync(
+            jiraHttpClient,
+            api2SearchUrl,
+            jiraTasks,
+            fieldIdentifiers,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<Dictionary<JiraTaskReference, JiraTaskInfo>?> TryGetJiraTaskInfosBySearchUrlAsync(
+        HttpClient jiraHttpClient,
+        Uri searchUrl,
+        IReadOnlyList<JiraTaskReference> jiraTasks,
+        JiraFieldIdentifiers fieldIdentifiers,
+        CancellationToken cancellationToken)
+    {
+        using var response = await _httpRetryExecutor.GetAsync(
+            jiraHttpClient,
+            searchUrl,
+            _jiraOptions.RetryCount,
+            cancellationToken).ConfigureAwait(false);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var searchResult = await _responseSerializer.SerializeAsync<JiraSearchResponseDto>(
+            response,
+            cancellationToken).ConfigureAwait(false);
+
+        if (searchResult is null)
+        {
+            return null;
+        }
+
+        var results = new Dictionary<JiraTaskReference, JiraTaskInfo>(JiraTaskReferenceComparer.Instance);
+
+        foreach (var issue in searchResult.Issues)
+        {
+            if (issue is null || !JiraTaskReference.TryCreate(issue.Key, out var jiraTask))
+            {
+                continue;
+            }
+
+            var issueInfo = new JiraIssueStatusResponseDto
+            {
+                Fields = issue.Fields,
+                Names = searchResult.Names,
+            }.ToDomain(
+                _jiraOptions.RequiredActionsFieldName,
+                _jiraOptions.BreakingChangesFieldName,
+                fieldIdentifiers.RequiredActionsFieldId,
+                fieldIdentifiers.BreakingChangesFieldId);
+
+            results[jiraTask] = JiraTaskInfo.FromIssueInfo(issueInfo);
+        }
+
+        foreach (var jiraTask in jiraTasks)
+        {
+            if (!results.ContainsKey(jiraTask))
+            {
+                results[jiraTask] = JiraTaskInfo.NotFound("Not found");
+            }
+        }
+
+        return results;
+    }
+
     private async Task<JiraIssueInfo?> ReadJiraIssueInfoAsync(
         HttpResponseMessage response,
         JiraFieldIdentifiers fieldIdentifiers,
@@ -279,6 +457,23 @@ public sealed class JiraIntegrationCore : IJiraIntegrationCore, IDisposable
         return new Uri(
             $"rest/api/3/issue/{Uri.EscapeDataString(jiraTask.Value)}?{query}",
             UriKind.Relative);
+    }
+
+    private static Uri BuildBatchSearchUrl(
+        IReadOnlyList<JiraTaskReference> jiraTasks,
+        JiraFieldIdentifiers fieldIdentifiers,
+        int apiVersion)
+    {
+        var escapedTaskKeys = jiraTasks
+            .Select(static jiraTask => $"\"{jiraTask.Value}\"");
+        var jql = $"key in ({string.Join(", ", escapedTaskKeys)}) order by key";
+        var fields = Uri.EscapeDataString(fieldIdentifiers.BuildIssueFieldsQuery());
+
+        var query = $"jql={Uri.EscapeDataString(jql)}&fields={fields}&maxResults={jiraTasks.Count}";
+
+        return apiVersion == 3
+            ? new Uri($"rest/api/3/search/jql?{query}", UriKind.Relative)
+            : new Uri($"rest/api/2/search?{query}", UriKind.Relative);
     }
 
     private readonly record struct JiraFieldIdentifiers(
@@ -391,4 +586,5 @@ public sealed class JiraIntegrationCore : IJiraIntegrationCore, IDisposable
     private readonly JiraOptions _jiraOptions;
     private readonly SemaphoreSlim _fieldIdentifiersSemaphore = new(1, 1);
     private JiraFieldIdentifiers? _resolvedFieldIdentifiers;
+    private const int JIRA_BATCH_SIZE = 20;
 }

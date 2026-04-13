@@ -6,6 +6,11 @@ namespace NReleaseBuilder.Transport.Models;
 public sealed class JiraSearchIssueDto
 {
     /// <summary>
+    /// Issue key.
+    /// </summary>
+    public string? Key { get; init; }
+
+    /// <summary>
     /// Issue fields payload.
     /// </summary>
     public JiraIssueFieldsDto? Fields { get; init; }

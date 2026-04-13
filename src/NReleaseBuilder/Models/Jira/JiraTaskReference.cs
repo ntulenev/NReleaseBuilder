@@ -38,6 +38,32 @@ public readonly record struct JiraTaskReference
     /// </summary>
     public static JiraTaskReference NotAvailable { get; } = new("N/A");
 
+    /// <summary>
+    /// Attempts to create a Jira task reference from string.
+    /// </summary>
+    /// <param name="value">Raw task reference value.</param>
+    /// <param name="jiraTaskReference">Created Jira task reference.</param>
+    /// <returns><see langword="true"/> when value is valid.</returns>
+    public static bool TryCreate(string? value, out JiraTaskReference jiraTaskReference)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            jiraTaskReference = default;
+            return false;
+        }
+
+        try
+        {
+            jiraTaskReference = new JiraTaskReference(value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            jiraTaskReference = default;
+            return false;
+        }
+    }
+
     /// <inheritdoc />
     public override string ToString() => Value ?? string.Empty;
 }

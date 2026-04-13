@@ -58,6 +58,58 @@ public sealed class JiraTaskResolver : IJiraTaskResolver, IDisposable
     }
 
     /// <inheritdoc />
+    public async Task PrimeTaskInfoCacheAsync(
+        IReadOnlyList<CommitInfo> commitInfos,
+        IReadOnlyList<JiraProjectName> projectNames,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(commitInfos);
+        ArgumentNullException.ThrowIfNull(projectNames);
+
+        if (commitInfos.Count == 0 || projectNames.Count == 0)
+        {
+            return;
+        }
+
+        var jiraTasksToLoad = new HashSet<JiraTaskReference>(JiraTaskReferenceComparer.Instance);
+
+        foreach (var commitInfo in commitInfos)
+        {
+            ArgumentNullException.ThrowIfNull(commitInfo);
+
+            var jiraTask = _jiraParser.ExtractJiraTask(commitInfo, projectNames);
+            var splitTasks = _jiraParser.SplitJiraTasks(jiraTask);
+            foreach (var task in splitTasks)
+            {
+                if (_jiraTaskInfoCacheByTask.ContainsKey(task)
+                    || _jiraTaskInfoLoadTasksByTask.ContainsKey(task))
+                {
+                    continue;
+                }
+
+                _ = jiraTasksToLoad.Add(task);
+            }
+        }
+
+        if (jiraTasksToLoad.Count == 0)
+        {
+            return;
+        }
+
+        var batchResults = await _jiraIntegrationCore.TryGetJiraTaskInfosAsync(
+            [.. jiraTasksToLoad],
+            cancellationToken).ConfigureAwait(false);
+
+        foreach (var (jiraTask, jiraTaskInfo) in batchResults)
+        {
+            if (!jiraTaskInfo.IsTransientStatus())
+            {
+                _ = _jiraTaskInfoCacheByTask.TryAdd(jiraTask, jiraTaskInfo);
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public void Dispose() => _jiraSemaphore.Dispose();
 
     private async Task<JiraTaskInfo> GetJiraTaskInfoAsync(

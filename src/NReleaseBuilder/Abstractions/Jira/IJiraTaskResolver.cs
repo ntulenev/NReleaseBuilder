@@ -21,4 +21,16 @@ public interface IJiraTaskResolver
         CommitInfo commitInfo,
         IReadOnlyList<JiraProjectName> projectNames,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Preloads Jira task metadata for tasks extracted from the provided commit payloads.
+    /// </summary>
+    /// <param name="commitInfos">Commit payloads that may include Jira task keys.</param>
+    /// <param name="projectNames">Allowed Jira project keys used for task extraction.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when preloading finishes.</returns>
+    Task PrimeTaskInfoCacheAsync(
+        IReadOnlyList<CommitInfo> commitInfos,
+        IReadOnlyList<JiraProjectName> projectNames,
+        CancellationToken cancellationToken);
 }

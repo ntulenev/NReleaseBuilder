@@ -238,6 +238,15 @@ public class BitbucketTagLookupCoreTests
 
         var jiraTaskResolverMock = new Mock<IJiraTaskResolver>(MockBehavior.Strict);
         jiraTaskResolverMock
+            .Setup(x => x.PrimeTaskInfoCacheAsync(
+                It.Is<IReadOnlyList<CommitInfo>>(value =>
+                    value.Count == 1
+                    && value[0].Message == "PROJ-1 fix bug"),
+                It.Is<IReadOnlyList<JiraProjectName>>(value =>
+                    value.Count == 1 && value[0] == projectName),
+                It.Is<CancellationToken>(value => value == cts.Token)))
+            .Returns(Task.CompletedTask);
+        jiraTaskResolverMock
             .Setup(x => x.ResolveFromCommitMessageAsync(
                 It.Is<CommitInfo>(value => value.Message == "PROJ-1 fix bug"),
                 It.Is<IReadOnlyList<JiraProjectName>>(value =>

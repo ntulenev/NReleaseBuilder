@@ -87,6 +87,16 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
         BitbucketProgressCallbacks? progress,
         CancellationToken cancellationToken)
     {
+        var commitInfosByCommit = await LoadCommitInfosAsync(
+            repositoryForBitbucketCalls,
+            tagsToInspect,
+            cancellationToken).ConfigureAwait(false);
+
+        await _jiraTaskResolver.PrimeTaskInfoCacheAsync(
+            [.. commitInfosByCommit.Values],
+            projectNames,
+            cancellationToken).ConfigureAwait(false);
+
         var jiraCacheByCommit = new Dictionary<string, JiraTaskResolution>(StringComparer.OrdinalIgnoreCase);
         var pullRequestUrlCacheByCommit = new Dictionary<string, Uri?>(StringComparer.OrdinalIgnoreCase);
         var enrichedTags = new List<RepositoryTagInfo>(tagsToInspect.Length);
@@ -95,6 +105,7 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
         {
             var jiraResolution = await ResolveJiraTaskResolutionAsync(
                 repositoryForBitbucketCalls,
+                commitInfosByCommit,
                 projectNames,
                 tag.CommitHash,
                 jiraCacheByCommit,
@@ -121,8 +132,33 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
         return enrichedTags;
     }
 
+    private async Task<Dictionary<string, CommitInfo>> LoadCommitInfosAsync(
+        RepositoryName repositoryForBitbucketCalls,
+        IReadOnlyList<RepositoryTagReference> tagsToInspect,
+        CancellationToken cancellationToken)
+    {
+        var commitInfosByCommit = new Dictionary<string, CommitInfo>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var commitHash in tagsToInspect
+                     .Select(static tag => tag.CommitHash)
+                     .Where(static commitHash => commitHash is not null)
+                     .Select(static commitHash => commitHash!.Value)
+                     .Distinct())
+        {
+            var commitInfo = await _bitbucketIntegrationCore.TryGetCommitMessageAsync(
+                repositoryForBitbucketCalls,
+                commitHash,
+                cancellationToken).ConfigureAwait(false);
+
+            commitInfosByCommit[commitHash.Value] = commitInfo;
+        }
+
+        return commitInfosByCommit;
+    }
+
     private async Task<JiraTaskResolution> ResolveJiraTaskResolutionAsync(
         RepositoryName repositoryForBitbucketCalls,
+        Dictionary<string, CommitInfo> commitInfosByCommit,
         JiraProjectName[] projectNames,
         CommitHash? commitHash,
         Dictionary<string, JiraTaskResolution> jiraCacheByCommit,
@@ -138,10 +174,13 @@ public sealed class BitbucketTagLookupCore : IBitbucketTagLookupCore
             return jiraResolution;
         }
 
-        var commitInfo = await _bitbucketIntegrationCore.TryGetCommitMessageAsync(
-            repositoryForBitbucketCalls,
-            commitHash.Value,
-            cancellationToken).ConfigureAwait(false);
+        if (!commitInfosByCommit.TryGetValue(commitHash.Value.Value, out var commitInfo))
+        {
+            commitInfo = await _bitbucketIntegrationCore.TryGetCommitMessageAsync(
+                repositoryForBitbucketCalls,
+                commitHash.Value,
+                cancellationToken).ConfigureAwait(false);
+        }
 
         jiraResolution = await _jiraTaskResolver.ResolveFromCommitMessageAsync(
                 commitInfo,
