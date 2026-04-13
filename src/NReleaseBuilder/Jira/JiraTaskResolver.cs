@@ -60,6 +60,67 @@ public sealed class JiraTaskResolver : IJiraTaskResolver, IDisposable
     /// <inheritdoc />
     public void Dispose() => _jiraSemaphore.Dispose();
 
+    private async Task<JiraTaskInfo> GetJiraTaskInfoAsync(
+        JiraTaskReference task,
+        CancellationToken cancellationToken)
+    {
+        if (_jiraTaskInfoCacheByTask.TryGetValue(task, out var cachedTaskInfo))
+        {
+            return cachedTaskInfo;
+        }
+
+        var loadTask = _jiraTaskInfoLoadTasksByTask.GetOrAdd(
+            task,
+            static (jiraTask, state) => state.Resolver.ResolveTaskInfoAsync(jiraTask, state.CancellationToken),
+            (Resolver: this, CancellationToken: cancellationToken));
+
+        try
+        {
+            return await loadTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            if (loadTask.IsCompleted)
+            {
+                _ = _jiraTaskInfoLoadTasksByTask.TryRemove(task, out _);
+            }
+        }
+    }
+
+    private async Task<JiraTaskInfo> ResolveTaskInfoAsync(
+        JiraTaskReference task,
+        CancellationToken cancellationToken)
+    {
+        if (_jiraTaskInfoCacheByTask.TryGetValue(task, out var cachedTaskInfo))
+        {
+            return cachedTaskInfo;
+        }
+
+        await _jiraSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_jiraTaskInfoCacheByTask.TryGetValue(task, out cachedTaskInfo))
+            {
+                return cachedTaskInfo;
+            }
+
+            var jiraTaskInfo = await _jiraIntegrationCore.TryGetJiraTaskInfoAsync(
+                task,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!jiraTaskInfo.IsTransientStatus())
+            {
+                _ = _jiraTaskInfoCacheByTask.TryAdd(task, jiraTaskInfo);
+            }
+
+            return jiraTaskInfo;
+        }
+        finally
+        {
+            _ = _jiraSemaphore.Release();
+        }
+    }
+
     private async Task<JiraTaskResolution> ResolveJiraTaskResolutionAsync(
         JiraTaskReference jiraTask,
         IReadOnlyList<JiraProjectName> projectNames,
@@ -80,25 +141,7 @@ public sealed class JiraTaskResolver : IJiraTaskResolver, IDisposable
 
         foreach (var task in jiraTasks)
         {
-            if (!_jiraTaskInfoCacheByTask.TryGetValue(task, out var jiraTaskInfo))
-            {
-                await _jiraSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    jiraTaskInfo = await _jiraIntegrationCore.TryGetJiraTaskInfoAsync(
-                        task,
-                        cancellationToken).ConfigureAwait(false);
-                }
-                finally
-                {
-                    _ = _jiraSemaphore.Release();
-                }
-
-                if (!jiraTaskInfo.IsTransientStatus())
-                {
-                    _ = _jiraTaskInfoCacheByTask.TryAdd(task, jiraTaskInfo);
-                }
-            }
+            var jiraTaskInfo = await GetJiraTaskInfoAsync(task, cancellationToken).ConfigureAwait(false);
 
             var jiraStatus = new JiraStatusReference(jiraTaskInfo.Status);
             var jiraTitle = new JiraTitleReference(jiraTaskInfo.Title);
@@ -146,5 +189,7 @@ public sealed class JiraTaskResolver : IJiraTaskResolver, IDisposable
     private readonly JiraOptions _jiraOptions;
     private readonly SemaphoreSlim _jiraSemaphore;
     private readonly ConcurrentDictionary<JiraTaskReference, JiraTaskInfo> _jiraTaskInfoCacheByTask =
+        new(JiraTaskReferenceComparer.Instance);
+    private readonly ConcurrentDictionary<JiraTaskReference, Task<JiraTaskInfo>> _jiraTaskInfoLoadTasksByTask =
         new(JiraTaskReferenceComparer.Instance);
 }

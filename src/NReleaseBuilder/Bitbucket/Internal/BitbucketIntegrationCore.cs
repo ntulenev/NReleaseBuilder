@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 
 using Microsoft.Extensions.Options;
@@ -45,48 +46,67 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
     public async Task<RepositoryTagReferenceLoadResult> LoadRepositoryTagReferencesAsync(
         RepositoryName repository,
         CancellationToken cancellationToken)
+        => await _repositoryTagReferenceLoadTasksByRepository.GetOrAdd(
+            repository,
+            static (repositoryName, state) => state.Core.LoadRepositoryTagReferencesCoreAsync(
+                repositoryName,
+                state.CancellationToken),
+            (Core: this, CancellationToken: cancellationToken)).ConfigureAwait(false);
+
+    private async Task<RepositoryTagReferenceLoadResult> LoadRepositoryTagReferencesCoreAsync(
+        RepositoryName repository,
+        CancellationToken cancellationToken)
     {
-        var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
-        var tags = new List<RepositoryTagReference>();
-
-        Uri? next = new(
-            $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/refs/tags?pagelen={_bitbucketOptions.PageLen}",
-            UriKind.Relative);
-
-        while (next is not null)
+        try
         {
-            using var response = await _httpRetryExecutor.GetAsync(
-                httpClient,
-                next,
-                _bitbucketOptions.RetryCount,
-                cancellationToken).ConfigureAwait(false);
+            var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
+            var tags = new List<RepositoryTagReference>();
 
-            if (response.StatusCode == HttpStatusCode.NotFound)
+            Uri? next = new(
+                $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/refs/tags?pagelen={_bitbucketOptions.PageLen}",
+                UriKind.Relative);
+
+            while (next is not null)
             {
-                return RepositoryTagReferenceLoadResult.RepoNotFound();
+                using var response = await _httpRetryExecutor.GetAsync(
+                    httpClient,
+                    next,
+                    _bitbucketOptions.RetryCount,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return RepositoryTagReferenceLoadResult.RepoNotFound();
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    var details = string.IsNullOrWhiteSpace(body)
+                        ? $"{(int)response.StatusCode} {response.ReasonPhrase}"
+                        : $"{(int)response.StatusCode} {response.ReasonPhrase}: {TrimText(body, 180)}";
+
+                    _ = _repositoryTagReferenceLoadTasksByRepository.TryRemove(repository, out _);
+                    return RepositoryTagReferenceLoadResult.ApiError(details);
+                }
+
+                var page = await ReadTagPageAsync(response, cancellationToken).ConfigureAwait(false);
+                tags.AddRange(page.Values);
+                next = page.Next;
             }
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                var details = string.IsNullOrWhiteSpace(body)
-                    ? $"{(int)response.StatusCode} {response.ReasonPhrase}"
-                    : $"{(int)response.StatusCode} {response.ReasonPhrase}: {TrimText(body, 180)}";
+            var distinctTags = tags
+                .GroupBy(x => x.Name.Value, StringComparer.OrdinalIgnoreCase)
+                .Select(x => x.First())
+                .ToArray();
 
-                return RepositoryTagReferenceLoadResult.ApiError(details);
-            }
-
-            var page = await ReadTagPageAsync(response, cancellationToken).ConfigureAwait(false);
-            tags.AddRange(page.Values);
-            next = page.Next;
+            return RepositoryTagReferenceLoadResult.Success(distinctTags);
         }
-
-        var distinctTags = tags
-            .GroupBy(x => x.Name.Value, StringComparer.OrdinalIgnoreCase)
-            .Select(x => x.First())
-            .ToArray();
-
-        return RepositoryTagReferenceLoadResult.Success(distinctTags);
+        catch
+        {
+            _ = _repositoryTagReferenceLoadTasksByRepository.TryRemove(repository, out _);
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -94,25 +114,47 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
         RepositoryName repository,
         CommitHash commitHash,
         CancellationToken cancellationToken)
+        => await _commitInfoTasksByRepositoryAndHash.GetOrAdd(
+            new RepositoryCommitCacheKey(repository, commitHash),
+            static (key, state) => state.Core.LoadCommitInfoCoreAsync(
+                key.Repository,
+                key.CommitHash,
+                state.CancellationToken),
+            (Core: this, CancellationToken: cancellationToken)).ConfigureAwait(false);
+
+    private async Task<CommitInfo> LoadCommitInfoCoreAsync(
+        RepositoryName repository,
+        CommitHash commitHash,
+        CancellationToken cancellationToken)
     {
-        var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
-        var commitUrl = new Uri(
-            $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash.Value)}",
-            UriKind.Relative);
-
-        using var response = await _httpRetryExecutor.GetAsync(
-            httpClient,
-            commitUrl,
-            _bitbucketOptions.RetryCount,
-            cancellationToken).ConfigureAwait(false);
-
-        if (!response.IsSuccessStatusCode)
+        var cacheKey = new RepositoryCommitCacheKey(repository, commitHash);
+        try
         {
-            return new CommitInfo(null);
-        }
+            var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
+            var commitUrl = new Uri(
+                $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash.Value)}",
+                UriKind.Relative);
 
-        var commit = await ReadCommitInfoAsync(response, cancellationToken).ConfigureAwait(false);
-        return commit ?? new CommitInfo(null);
+            using var response = await _httpRetryExecutor.GetAsync(
+                httpClient,
+                commitUrl,
+                _bitbucketOptions.RetryCount,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _ = _commitInfoTasksByRepositoryAndHash.TryRemove(cacheKey, out _);
+                return new CommitInfo(null);
+            }
+
+            var commit = await ReadCommitInfoAsync(response, cancellationToken).ConfigureAwait(false);
+            return commit ?? new CommitInfo(null);
+        }
+        catch
+        {
+            _ = _commitInfoTasksByRepositoryAndHash.TryRemove(cacheKey, out _);
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -120,39 +162,61 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
         RepositoryName repository,
         CommitHash commitHash,
         CancellationToken cancellationToken)
+        => await _pullRequestUrlTasksByRepositoryAndHash.GetOrAdd(
+            new RepositoryCommitCacheKey(repository, commitHash),
+            static (key, state) => state.Core.LoadPullRequestUrlCoreAsync(
+                key.Repository,
+                key.CommitHash,
+                state.CancellationToken),
+            (Core: this, CancellationToken: cancellationToken)).ConfigureAwait(false);
+
+    private async Task<Uri?> LoadPullRequestUrlCoreAsync(
+        RepositoryName repository,
+        CommitHash commitHash,
+        CancellationToken cancellationToken)
     {
-        var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
-        var next = new Uri(
-            $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash.Value)}/pullrequests?pagelen={_bitbucketOptions.PageLen}",
-            UriKind.Relative);
-        Uri? fallbackPullRequestUrl = null;
-
-        while (next is not null)
+        var cacheKey = new RepositoryCommitCacheKey(repository, commitHash);
+        try
         {
-            using var response = await _httpRetryExecutor.GetAsync(
-                httpClient,
-                next,
-                _bitbucketOptions.RetryCount,
-                cancellationToken).ConfigureAwait(false);
+            var httpClient = _httpClientFactory.CreateClient(HttpClientNames.BITBUCKET);
+            var next = new Uri(
+                $"repositories/{Uri.EscapeDataString(_bitbucketOptions.Workspace)}/{Uri.EscapeDataString(repository.Value)}/commit/{Uri.EscapeDataString(commitHash.Value)}/pullrequests?pagelen={_bitbucketOptions.PageLen}",
+                UriKind.Relative);
+            Uri? fallbackPullRequestUrl = null;
 
-            if (!response.IsSuccessStatusCode)
+            while (next is not null)
             {
-                return fallbackPullRequestUrl;
+                using var response = await _httpRetryExecutor.GetAsync(
+                    httpClient,
+                    next,
+                    _bitbucketOptions.RetryCount,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _ = _pullRequestUrlTasksByRepositoryAndHash.TryRemove(cacheKey, out _);
+                    return fallbackPullRequestUrl;
+                }
+
+                var page = await ReadPullRequestPageAsync(response, cancellationToken).ConfigureAwait(false);
+                var pullRequests = page?.Values ?? [];
+
+                if (TrySelectMergedPullRequestUrl(pullRequests) is { } mergedPullRequestUrl)
+                {
+                    return mergedPullRequestUrl;
+                }
+
+                fallbackPullRequestUrl ??= TrySelectAnyPullRequestUrl(pullRequests);
+                next = TryCreateRequestUri(page?.Next);
             }
 
-            var page = await ReadPullRequestPageAsync(response, cancellationToken).ConfigureAwait(false);
-            var pullRequests = page?.Values ?? [];
-
-            if (TrySelectMergedPullRequestUrl(pullRequests) is { } mergedPullRequestUrl)
-            {
-                return mergedPullRequestUrl;
-            }
-
-            fallbackPullRequestUrl ??= TrySelectAnyPullRequestUrl(pullRequests);
-            next = TryCreateRequestUri(page?.Next);
+            return fallbackPullRequestUrl;
         }
-
-        return fallbackPullRequestUrl;
+        catch
+        {
+            _ = _pullRequestUrlTasksByRepositoryAndHash.TryRemove(cacheKey, out _);
+            throw;
+        }
     }
 
     private async Task<RepositoryTagPage> ReadTagPageAsync(
@@ -268,4 +332,11 @@ public sealed class BitbucketIntegrationCore : IBitbucketIntegrationCore
     private readonly IHttpRetryExecutor _httpRetryExecutor;
     private readonly IResponseSerializer _responseSerializer;
     private readonly BitbucketOptions _bitbucketOptions;
+    private readonly ConcurrentDictionary<RepositoryName, Task<RepositoryTagReferenceLoadResult>> _repositoryTagReferenceLoadTasksByRepository = new();
+    private readonly ConcurrentDictionary<RepositoryCommitCacheKey, Task<CommitInfo>> _commitInfoTasksByRepositoryAndHash = new();
+    private readonly ConcurrentDictionary<RepositoryCommitCacheKey, Task<Uri?>> _pullRequestUrlTasksByRepositoryAndHash = new();
+
+    private readonly record struct RepositoryCommitCacheKey(
+        RepositoryName Repository,
+        CommitHash CommitHash);
 }

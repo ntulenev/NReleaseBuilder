@@ -541,8 +541,11 @@ public class JiraIntegrationCoreTests
             {
                 BaseUrl = new Uri("https://jira.example.test/"),
                 RetryCount = retryCount,
+                CheckReleaseAlerts = true,
                 RequiredActionsFieldName = "Required Actions",
+                RequiredActionsFieldId = "customfield_1",
                 BreakingChangesFieldName = "Breaking changes",
+                BreakingChangesFieldId = "customfield_2",
             },
         };
 
@@ -550,7 +553,7 @@ public class JiraIntegrationCoreTests
     }
 
     private static string BuildIssueUrl(JiraTaskReference jiraTask) =>
-        $"rest/api/3/issue/{Uri.EscapeDataString(jiraTask.Value)}?expand=names";
+        $"rest/api/3/issue/{Uri.EscapeDataString(jiraTask.Value)}?fields=summary%2Cstatus%2Ccustomfield_1%2Ccustomfield_2";
 
     private static string BuildApi3SearchUrl(JiraTaskReference jiraTask)
     {

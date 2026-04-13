@@ -249,6 +249,63 @@ public class JiraTaskResolverTests
         integrationCallCount.Should().Be(2);
     }
 
+    [Fact(DisplayName = "JiraTaskResolver ResolveFromCommitMessageAsync coalesces concurrent requests for the same task.")]
+    [Trait("Category", "Unit")]
+    public async Task ResolveFromCommitMessageAsyncCoalescesConcurrentRequestsForTheSameTask()
+    {
+        // Arrange
+        var options = CreateOptions(checkReleaseAlerts: false);
+        var commitInfo = new CommitInfo("PROJ-1");
+        IReadOnlyList<JiraProjectName> projectNames = [new JiraProjectName("PROJ")];
+        var task = new JiraTaskReference("PROJ-1");
+        var taskArray = new[] { task };
+        var jiraTaskInfo = new JiraTaskInfo("Done", "Issue title", null, null);
+        using var cts = new CancellationTokenSource();
+        var integrationCallCount = 0;
+        var integrationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseIntegration = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var parserMock = new Mock<IJiraParser>(MockBehavior.Strict);
+        parserMock
+            .Setup(x => x.ExtractJiraTask(
+                It.Is<CommitInfo>(value => value.Message == commitInfo.Message),
+                It.Is<IReadOnlyList<JiraProjectName>>(value =>
+                    value.Count == 1 && value[0].Value == "PROJ")))
+            .Returns(task);
+        parserMock
+            .Setup(x => x.SplitJiraTasks(
+                It.Is<JiraTaskReference>(value => value == task)))
+            .Returns(taskArray);
+
+        var integrationCoreMock = new Mock<IJiraIntegrationCore>(MockBehavior.Strict);
+        integrationCoreMock
+            .Setup(x => x.TryGetJiraTaskInfoAsync(
+                It.Is<JiraTaskReference>(value => value == task),
+                It.Is<CancellationToken>(value => value == cts.Token)))
+            .Returns(async () =>
+            {
+                Interlocked.Increment(ref integrationCallCount);
+                _ = integrationStarted.TrySetResult();
+                await releaseIntegration.Task;
+                return jiraTaskInfo;
+            });
+
+        using var sut = new JiraTaskResolver(options, parserMock.Object, integrationCoreMock.Object);
+
+        // Act
+        var firstTask = sut.ResolveFromCommitMessageAsync(commitInfo, projectNames, cts.Token);
+        await integrationStarted.Task;
+        var secondTask = sut.ResolveFromCommitMessageAsync(commitInfo, projectNames, cts.Token);
+        _ = releaseIntegration.TrySetResult();
+
+        var results = await Task.WhenAll(firstTask, secondTask);
+
+        // Assert
+        integrationCallCount.Should().Be(1);
+        results[0].Statuses.Value.Should().Be("Done");
+        results[1].Statuses.Value.Should().Be("Done");
+    }
+
     [Fact(DisplayName = "JiraTaskResolver ResolveFromCommitMessageAsync aggregates release alerts when enabled.")]
     [Trait("Category", "Unit")]
     public async Task ResolveFromCommitMessageAsyncAggregatesReleaseAlertsWhenEnabled()

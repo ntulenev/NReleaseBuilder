@@ -43,9 +43,21 @@ public sealed class JiraOptions
     public string RequiredActionsFieldName { get; init; } = "Required Actions";
 
     /// <summary>
+    /// Optional Jira custom field identifier for release Required Actions.
+    /// When configured, it is used directly and avoids loading field-name metadata.
+    /// </summary>
+    public string RequiredActionsFieldId { get; init; } = string.Empty;
+
+    /// <summary>
     /// Jira custom field display name for release Breaking changes.
     /// </summary>
     public string BreakingChangesFieldName { get; init; } = "Breaking changes";
+
+    /// <summary>
+    /// Optional Jira custom field identifier for release Breaking changes.
+    /// When configured, it is used directly and avoids loading field-name metadata.
+    /// </summary>
+    public string BreakingChangesFieldId { get; init; } = string.Empty;
 
     /// <summary>
     /// Number of retries for transient Jira errors.
@@ -112,4 +124,22 @@ public sealed class JiraOptions
                 .Distinct()
         ];
     }
+
+    /// <summary>
+    /// Resolves configured Required Actions field identifier when present.
+    /// </summary>
+    /// <returns>Trimmed field identifier or <see langword="null"/>.</returns>
+    public string? ResolveRequiredActionsFieldId()
+        => string.IsNullOrWhiteSpace(RequiredActionsFieldId)
+            ? null
+            : RequiredActionsFieldId.Trim();
+
+    /// <summary>
+    /// Resolves configured Breaking changes field identifier when present.
+    /// </summary>
+    /// <returns>Trimmed field identifier or <see langword="null"/>.</returns>
+    public string? ResolveBreakingChangesFieldId()
+        => string.IsNullOrWhiteSpace(BreakingChangesFieldId)
+            ? null
+            : BreakingChangesFieldId.Trim();
 }

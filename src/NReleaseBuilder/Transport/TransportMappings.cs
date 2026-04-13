@@ -55,11 +55,15 @@ public static class TransportMappings
     /// <param name="dto">Jira issue DTO.</param>
     /// <param name="requiredActionsFieldName">Custom field display name for Required Actions.</param>
     /// <param name="breakingChangesFieldName">Custom field display name for Breaking changes.</param>
+    /// <param name="requiredActionsFieldId">Optional custom field identifier for Required Actions.</param>
+    /// <param name="breakingChangesFieldId">Optional custom field identifier for Breaking changes.</param>
     /// <returns>Domain Jira issue model.</returns>
     public static JiraIssueInfo ToDomain(
         this JiraIssueStatusResponseDto dto,
         string requiredActionsFieldName,
-        string breakingChangesFieldName)
+        string breakingChangesFieldName,
+        string? requiredActionsFieldId = null,
+        string? breakingChangesFieldId = null)
     {
         ArgumentNullException.ThrowIfNull(dto);
         ArgumentException.ThrowIfNullOrWhiteSpace(requiredActionsFieldName);
@@ -71,8 +75,14 @@ public static class TransportMappings
             : null;
         var title = NormalizeIssueTitle(dto.Fields?.Summary);
 
-        var requiredActionsDetails = ExtractCustomFieldText(dto, requiredActionsFieldName);
-        var breakingChangesDetails = ExtractCustomFieldText(dto, breakingChangesFieldName);
+        var requiredActionsDetails = ExtractCustomFieldText(
+            dto,
+            requiredActionsFieldName,
+            requiredActionsFieldId);
+        var breakingChangesDetails = ExtractCustomFieldText(
+            dto,
+            breakingChangesFieldName,
+            breakingChangesFieldId);
 
         return new JiraIssueInfo(statusName, title, requiredActionsDetails, breakingChangesDetails);
     }
@@ -108,9 +118,15 @@ public static class TransportMappings
         return new JiraSearchResult(issues);
     }
 
-    private static string? ExtractCustomFieldText(JiraIssueStatusResponseDto dto, string fieldDisplayName)
+    private static string? ExtractCustomFieldText(
+        JiraIssueStatusResponseDto dto,
+        string fieldDisplayName,
+        string? fieldIdentifier)
     {
-        var fieldIdentifier = ResolveFieldIdentifierByDisplayName(dto.Names, fieldDisplayName);
+        fieldIdentifier = string.IsNullOrWhiteSpace(fieldIdentifier)
+            ? ResolveFieldIdentifierByDisplayName(dto.Names, fieldDisplayName)
+            : fieldIdentifier.Trim();
+
         if (string.IsNullOrWhiteSpace(fieldIdentifier))
         {
             return null;
